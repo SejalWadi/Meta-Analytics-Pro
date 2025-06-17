@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/meta-icon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Meta Analytics Pro - Content Performance Analyzer</title>
+    <meta name="description" content="Comprehensive Facebook and Instagram analytics platform for content optimization and audience insights" />
+  </head>
+  <body class="bg-gray-900 text-white">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+    
+    <!-- Facebook SDK -->
+    <script>
+      window.fbAsyncInit = function() {
+        console.log('Facebook SDK initializing...');
+        FB.init({
+          appId: '649991254751238', // Replace with your actual Facebook App ID
+          cookie: true,
+          xfbml: true,
+          version: 'v18.0'
+        });
+        
+        console.log('Facebook SDK initialized');
+        // Dispatch custom event when SDK is ready
+        window.dispatchEvent(new CustomEvent('fbSdkLoaded'));
+      };
+
+      (function(d, s, id){
+         var js, fjs = d.getElementsByTagName(s)[0];
+         if (d.getElementById(id)) {return;}
+         js = d.createElement(s); js.id = id;
+         js.src = "https://connect.facebook.net/en_US/sdk.js";
+         fjs.parentNode.insertBefore(js, fjs);
+       }(document, 'script', 'facebook-jssdk'));
+    </script>
+  </body>
+</html>
