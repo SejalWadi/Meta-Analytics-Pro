@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Plus, Facebook, Instagram, Settings, Users, TrendingUp, RefreshCw, AlertCircle } from 'lucide-react';
+import { Plus, Facebook, Instagram, Settings, Users, TrendingUp, RefreshCw, AlertCircle, ExternalLink, CheckCircle } from 'lucide-react';
 import { analyticsService } from '../services/analyticsService';
 import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
@@ -12,6 +12,9 @@ interface Account {
   followers: number;
   isConnected: boolean;
   lastSync?: string;
+  category?: string;
+  about?: string;
+  username?: string;
 }
 
 const Accounts: React.FC = () => {
@@ -19,12 +22,48 @@ const Accounts: React.FC = () => {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [setupStatus, setSetupStatus] = useState<{
+    hasPages: boolean;
+    hasPermissions: boolean;
+    needsSetup: boolean;
+  }>({
+    hasPages: false,
+    hasPermissions: false,
+    needsSetup: true
+  });
 
   useEffect(() => {
     if (user) {
       fetchAccounts();
+      checkSetupStatus();
     }
   }, [user]);
+
+  const checkSetupStatus = async () => {
+    if (!user?.accessToken) return;
+
+    try {
+      // Check permissions
+      if (typeof window !== 'undefined' && window.FB) {
+        window.FB.api('/me/permissions', { access_token: user.accessToken }, (response: any) => {
+          const grantedPermissions = response.data?.filter((p: any) => p.status === 'granted').map((p: any) => p.permission) || [];
+          const hasPagePermissions = grantedPermissions.includes('pages_show_list');
+          
+          setSetupStatus(prev => ({
+            ...prev,
+            hasPermissions: hasPagePermissions,
+            needsSetup: !hasPagePermissions
+          }));
+
+          if (!hasPagePermissions) {
+            setError('Missing required permissions. Please grant page access permissions to see your Facebook pages.');
+          }
+        });
+      }
+    } catch (error) {
+      console.error('Error checking setup status:', error);
+    }
+  };
 
   const fetchAccounts = async () => {
     if (!user?.accessToken) return;
@@ -33,22 +72,59 @@ const Accounts: React.FC = () => {
     setError(null);
     
     try {
-      console.log('Fetching accounts...');
+      console.log('Fetching accounts for user:', user.name);
       const accountsData = await analyticsService.getAccounts(user.accessToken);
       console.log('Accounts fetched:', accountsData);
+      
       setAccounts(accountsData);
+      setSetupStatus(prev => ({
+        ...prev,
+        hasPages: accountsData.length > 0,
+        needsSetup: accountsData.length === 0
+      }));
       
       if (accountsData.length === 0) {
-        toast.error('No Facebook pages or Instagram accounts found. Make sure you have admin access to pages.');
+        setError('No Facebook pages or Instagram accounts found. You need admin access to Facebook pages to see analytics.');
+        toast.error('No pages found. Make sure you have admin access to Facebook pages.');
       } else {
         toast.success(`Found ${accountsData.length} account(s)`);
+        setError(null);
       }
     } catch (error: any) {
       console.error('Failed to fetch accounts:', error);
       setError(error.message || 'Failed to fetch accounts');
-      toast.error('Failed to fetch accounts. Please try again.');
+      toast.error('Failed to fetch accounts. Please try reconnecting.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const requestAdditionalPermissions = async () => {
+    if (!user?.accessToken || typeof window === 'undefined' || !window.FB) {
+      toast.error('Facebook SDK not available. Please refresh the page.');
+      return;
+    }
+
+    try {
+      toast.loading('Requesting additional permissions...');
+      
+      window.FB.login((response: any) => {
+        if (response.authResponse) {
+          toast.success('Permissions granted! Refreshing accounts...');
+          setTimeout(() => {
+            fetchAccounts();
+            checkSetupStatus();
+          }, 1000);
+        } else {
+          toast.error('Permissions not granted. Please allow access to your Facebook pages.');
+        }
+      }, { 
+        scope: 'pages_show_list,pages_read_engagement,pages_read_user_content,instagram_basic',
+        auth_type: 'rerequest',
+        return_scopes: true 
+      });
+    } catch (error) {
+      toast.error('Failed to request permissions');
     }
   };
 
@@ -58,15 +134,19 @@ const Accounts: React.FC = () => {
     try {
       toast.loading('Connecting new accounts...');
       
-      // Re-authenticate to get fresh permissions
       if (typeof window !== 'undefined' && window.FB) {
         window.FB.login((response: any) => {
           if (response.authResponse) {
-            // Refresh the page to get new accounts
-            window.location.reload();
+            toast.success('New permissions granted! Refreshing...');
+            setTimeout(() => {
+              window.location.reload();
+            }, 1000);
+          } else {
+            toast.error('Connection cancelled');
           }
         }, { 
-          scope: 'pages_show_list,pages_read_engagement,instagram_basic',
+          scope: 'pages_show_list,pages_read_engagement,pages_read_user_content,instagram_basic',
+          auth_type: 'rerequest',
           return_scopes: true 
         });
       }
@@ -90,6 +170,14 @@ const Accounts: React.FC = () => {
 
   const getPlatformColor = (platform: string) => {
     return platform === 'facebook' ? 'text-blue-400' : 'text-pink-400';
+  };
+
+  const openFacebookPagesManager = () => {
+    window.open('https://www.facebook.com/pages/', '_blank');
+  };
+
+  const openInstagramBusiness = () => {
+    window.open('https://business.instagram.com/', '_blank');
   };
 
   return (
@@ -126,8 +214,63 @@ const Accounts: React.FC = () => {
         </div>
       </div>
 
+      {/* Setup Guide */}
+      {setupStatus.needsSetup && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-yellow-600 bg-opacity-20 border border-yellow-600 text-yellow-400 p-6 rounded-lg"
+        >
+          <div className="flex items-start space-x-3">
+            <AlertCircle className="h-6 w-6 mt-0.5" />
+            <div className="flex-1">
+              <h3 className="font-semibold mb-2">Setup Required for Full Analytics</h3>
+              <div className="space-y-3 text-sm text-yellow-100">
+                <p>To see your Facebook and Instagram analytics, you need:</p>
+                <ul className="list-disc list-inside space-y-1 ml-4">
+                  <li>Admin access to at least one Facebook page</li>
+                  <li>Recent posts on your page (within last 30 days)</li>
+                  <li>Instagram business account linked to Facebook (optional)</li>
+                  <li>Grant all required permissions</li>
+                </ul>
+                
+                <div className="flex flex-wrap gap-3 mt-4">
+                  {!setupStatus.hasPermissions && (
+                    <button
+                      onClick={requestAdditionalPermissions}
+                      className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center space-x-2"
+                    >
+                      <CheckCircle className="h-4 w-4" />
+                      <span>Grant Permissions</span>
+                    </button>
+                  )}
+                  
+                  <button
+                    onClick={openFacebookPagesManager}
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center space-x-2"
+                  >
+                    <Facebook className="h-4 w-4" />
+                    <span>Create Facebook Page</span>
+                    <ExternalLink className="h-3 w-3" />
+                  </button>
+                  
+                  <button
+                    onClick={openInstagramBusiness}
+                    className="bg-pink-600 hover:bg-pink-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center space-x-2"
+                  >
+                    <Instagram className="h-4 w-4" />
+                    <span>Setup Instagram Business</span>
+                    <ExternalLink className="h-3 w-3" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </motion.div>
+      )}
+
       {/* Error Message */}
-      {error && (
+      {error && !setupStatus.needsSetup && (
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -224,12 +367,20 @@ const Accounts: React.FC = () => {
             <p className="text-sm text-gray-500 mb-4">
               Make sure you have admin access to Facebook pages or Instagram business accounts
             </p>
-            <button
-              onClick={connectNewAccount}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
-            >
-              Connect Accounts
-            </button>
+            <div className="space-y-3">
+              <button
+                onClick={requestAdditionalPermissions}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors mr-3"
+              >
+                Grant Permissions
+              </button>
+              <button
+                onClick={connectNewAccount}
+                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition-colors"
+              >
+                Connect Accounts
+              </button>
+            </div>
           </div>
         ) : (
           <div className="divide-y divide-gray-700">
@@ -255,10 +406,14 @@ const Accounts: React.FC = () => {
                         <div className="flex items-center space-x-4 text-sm text-gray-400">
                           <span className="capitalize">{account.platform}</span>
                           <span>{(account.followers || 0).toLocaleString()} followers</span>
+                          {account.category && <span>{account.category}</span>}
                           {account.lastSync && (
                             <span>Last sync: {new Date(account.lastSync).toLocaleDateString()}</span>
                           )}
                         </div>
+                        {account.about && (
+                          <p className="text-xs text-gray-500 mt-1 max-w-md truncate">{account.about}</p>
+                        )}
                       </div>
                     </div>
                     
@@ -306,15 +461,21 @@ const Accounts: React.FC = () => {
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-gray-300">Pages Access</span>
-              <span className="text-green-400">✓ Connected</span>
+              <span className={setupStatus.hasPermissions ? 'text-green-400' : 'text-red-400'}>
+                {setupStatus.hasPermissions ? '✓ Connected' : '✗ Missing'}
+              </span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-gray-300">Insights API</span>
-              <span className="text-green-400">✓ Active</span>
+              <span className="text-gray-300">Pages Found</span>
+              <span className={setupStatus.hasPages ? 'text-green-400' : 'text-yellow-400'}>
+                {setupStatus.hasPages ? '✓ Found' : '⚠ None'}
+              </span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-gray-300">Posts Management</span>
-              <span className="text-green-400">✓ Enabled</span>
+              <span className="text-gray-300">Analytics API</span>
+              <span className={setupStatus.hasPages ? 'text-green-400' : 'text-gray-400'}>
+                {setupStatus.hasPages ? '✓ Active' : '○ Pending'}
+              </span>
             </div>
           </div>
         </motion.div>
@@ -331,16 +492,22 @@ const Accounts: React.FC = () => {
           </div>
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <span className="text-gray-300">Basic Display</span>
-              <span className="text-green-400">✓ Connected</span>
+              <span className="text-gray-300">Business Account</span>
+              <span className={accounts.some(acc => acc.platform === 'instagram') ? 'text-green-400' : 'text-yellow-400'}>
+                {accounts.some(acc => acc.platform === 'instagram') ? '✓ Connected' : '○ Optional'}
+              </span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-gray-300">Insights API</span>
-              <span className="text-green-400">✓ Active</span>
+              <span className={accounts.some(acc => acc.platform === 'instagram') ? 'text-green-400' : 'text-gray-400'}>
+                {accounts.some(acc => acc.platform === 'instagram') ? '✓ Active' : '○ Pending'}
+              </span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-gray-300">Media Access</span>
-              <span className="text-green-400">✓ Enabled</span>
+              <span className={accounts.some(acc => acc.platform === 'instagram') ? 'text-green-400' : 'text-gray-400'}>
+                {accounts.some(acc => acc.platform === 'instagram') ? '✓ Enabled' : '○ Pending'}
+              </span>
             </div>
           </div>
         </motion.div>

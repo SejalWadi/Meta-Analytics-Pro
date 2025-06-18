@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Target, Clock, TrendingUp, Hash, Lightbulb, Calendar } from 'lucide-react';
+import { Target, Clock, TrendingUp, Hash, Lightbulb, Calendar, ExternalLink, Users, BarChart } from 'lucide-react';
 import { analyticsService } from '../services/analyticsService';
 import { useAuth } from '../contexts/AuthContext';
+import toast from 'react-hot-toast';
 
 interface OptimizationData {
   bestTimeToPost: {
@@ -41,6 +42,7 @@ const Optimization: React.FC = () => {
       setOptimizationData(data);
     } catch (error) {
       console.error('Failed to fetch optimization data:', error);
+      toast.error('Failed to load optimization recommendations');
     } finally {
       setLoading(false);
     }
@@ -64,6 +66,39 @@ const Optimization: React.FC = () => {
     }
   };
 
+  // Working button handlers
+  const openContentScheduler = () => {
+    // Open Facebook Creator Studio for scheduling
+    window.open('https://business.facebook.com/creatorstudio/', '_blank');
+    toast.success('Opening Facebook Creator Studio for content scheduling');
+  };
+
+  const openCompetitorAnalysis = () => {
+    // Open Facebook Audience Insights for competitor analysis
+    window.open('https://www.facebook.com/business/insights/tools/audience-insights', '_blank');
+    toast.success('Opening Facebook Audience Insights for competitor analysis');
+  };
+
+  const openFacebookInsights = () => {
+    window.open('https://www.facebook.com/insights/', '_blank');
+    toast.success('Opening Facebook Page Insights');
+  };
+
+  const openInstagramInsights = () => {
+    window.open('https://business.instagram.com/insights', '_blank');
+    toast.success('Opening Instagram Insights');
+  };
+
+  const openHashtagTool = () => {
+    window.open('https://www.facebook.com/business/help/681378582238654', '_blank');
+    toast.success('Opening Facebook hashtag best practices guide');
+  };
+
+  const openContentIdeas = () => {
+    window.open('https://www.facebook.com/business/inspiration', '_blank');
+    toast.success('Opening Facebook Business inspiration hub');
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -74,6 +109,28 @@ const Optimization: React.FC = () => {
         <div>
           <h1 className="text-3xl font-bold text-white">Content Optimization</h1>
           <p className="text-gray-400 mt-1">AI-powered recommendations to boost your content performance</p>
+        </div>
+        <div className="flex items-center space-x-3">
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={openFacebookInsights}
+            className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
+          >
+            <BarChart className="h-4 w-4" />
+            <span>Facebook Insights</span>
+            <ExternalLink className="h-3 w-3" />
+          </motion.button>
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={openInstagramInsights}
+            className="flex items-center space-x-2 bg-pink-600 hover:bg-pink-700 text-white px-4 py-2 rounded-lg transition-colors"
+          >
+            <Users className="h-4 w-4" />
+            <span>Instagram Insights</span>
+            <ExternalLink className="h-3 w-3" />
+          </motion.button>
         </div>
       </div>
 
@@ -111,9 +168,21 @@ const Optimization: React.FC = () => {
         animate={{ opacity: 1, y: 0 }}
         className="bg-gray-800 p-6 rounded-xl border border-gray-700"
       >
-        <div className="flex items-center space-x-3 mb-4">
-          <Clock className="h-6 w-6 text-blue-400" />
-          <h3 className="text-lg font-bold text-white">Best Times to Post</h3>
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center space-x-3">
+            <Clock className="h-6 w-6 text-blue-400" />
+            <h3 className="text-lg font-bold text-white">Best Times to Post</h3>
+          </div>
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={openContentScheduler}
+            className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg text-sm transition-colors"
+          >
+            <Calendar className="h-4 w-4" />
+            <span>Schedule Posts</span>
+            <ExternalLink className="h-3 w-3" />
+          </motion.button>
         </div>
         
         {loading ? (
@@ -162,9 +231,21 @@ const Optimization: React.FC = () => {
         animate={{ opacity: 1, y: 0 }}
         className="bg-gray-800 p-6 rounded-xl border border-gray-700"
       >
-        <div className="flex items-center space-x-3 mb-4">
-          <Lightbulb className="h-6 w-6 text-yellow-400" />
-          <h3 className="text-lg font-bold text-white">Content Recommendations</h3>
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center space-x-3">
+            <Lightbulb className="h-6 w-6 text-yellow-400" />
+            <h3 className="text-lg font-bold text-white">Content Recommendations</h3>
+          </div>
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={openContentIdeas}
+            className="flex items-center space-x-2 bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-2 rounded-lg text-sm transition-colors"
+          >
+            <Lightbulb className="h-4 w-4" />
+            <span>Get Ideas</span>
+            <ExternalLink className="h-3 w-3" />
+          </motion.button>
         </div>
         
         {loading ? (
@@ -210,9 +291,21 @@ const Optimization: React.FC = () => {
         animate={{ opacity: 1, y: 0 }}
         className="bg-gray-800 p-6 rounded-xl border border-gray-700"
       >
-        <div className="flex items-center space-x-3 mb-4">
-          <Hash className="h-6 w-6 text-purple-400" />
-          <h3 className="text-lg font-bold text-white">Hashtag Analysis</h3>
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center space-x-3">
+            <Hash className="h-6 w-6 text-purple-400" />
+            <h3 className="text-lg font-bold text-white">Hashtag Analysis</h3>
+          </div>
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={openHashtagTool}
+            className="flex items-center space-x-2 bg-purple-600 hover:bg-purple-700 text-white px-3 py-2 rounded-lg text-sm transition-colors"
+          >
+            <Hash className="h-4 w-4" />
+            <span>Hashtag Guide</span>
+            <ExternalLink className="h-3 w-3" />
+          </motion.button>
         </div>
         
         {loading ? (
@@ -239,7 +332,11 @@ const Optimization: React.FC = () => {
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: index * 0.05 }}
-                    className="bg-green-600 bg-opacity-20 text-green-400 px-3 py-1 rounded-full text-sm"
+                    className="bg-green-600 bg-opacity-20 text-green-400 px-3 py-1 rounded-full text-sm cursor-pointer hover:bg-opacity-30 transition-colors"
+                    onClick={() => {
+                      navigator.clipboard.writeText(hashtag);
+                      toast.success(`Copied ${hashtag} to clipboard!`);
+                    }}
                   >
                     {hashtag}
                   </motion.div>
@@ -256,7 +353,11 @@ const Optimization: React.FC = () => {
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: index * 0.05 }}
-                    className="bg-orange-600 bg-opacity-20 text-orange-400 px-3 py-1 rounded-full text-sm"
+                    className="bg-orange-600 bg-opacity-20 text-orange-400 px-3 py-1 rounded-full text-sm cursor-pointer hover:bg-opacity-30 transition-colors"
+                    onClick={() => {
+                      navigator.clipboard.writeText(hashtag);
+                      toast.success(`Copied ${hashtag} to clipboard!`);
+                    }}
                   >
                     {hashtag}
                   </motion.div>
@@ -273,7 +374,11 @@ const Optimization: React.FC = () => {
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: index * 0.05 }}
-                    className="bg-blue-600 bg-opacity-20 text-blue-400 px-3 py-1 rounded-full text-sm"
+                    className="bg-blue-600 bg-opacity-20 text-blue-400 px-3 py-1 rounded-full text-sm cursor-pointer hover:bg-opacity-30 transition-colors"
+                    onClick={() => {
+                      navigator.clipboard.writeText(hashtag);
+                      toast.success(`Copied ${hashtag} to clipboard!`);
+                    }}
                   >
                     {hashtag}
                   </motion.div>
@@ -299,27 +404,37 @@ const Optimization: React.FC = () => {
           <motion.div
             whileHover={{ scale: 1.02 }}
             className="bg-gradient-to-r from-blue-600 to-blue-700 p-4 rounded-lg cursor-pointer"
+            onClick={openContentScheduler}
           >
             <h4 className="font-semibold text-white mb-2">Schedule Next Week's Posts</h4>
             <p className="text-blue-100 text-sm mb-3">
               Plan your content for optimal engagement times
             </p>
-            <button className="bg-white text-blue-600 px-4 py-2 rounded-lg text-sm font-medium">
-              Open Scheduler
-            </button>
+            <div className="flex items-center justify-between">
+              <button className="bg-white text-blue-600 px-4 py-2 rounded-lg text-sm font-medium flex items-center space-x-2">
+                <Calendar className="h-4 w-4" />
+                <span>Open Scheduler</span>
+              </button>
+              <ExternalLink className="h-4 w-4 text-blue-200" />
+            </div>
           </motion.div>
           
           <motion.div
             whileHover={{ scale: 1.02 }}
             className="bg-gradient-to-r from-purple-600 to-purple-700 p-4 rounded-lg cursor-pointer"
+            onClick={openCompetitorAnalysis}
           >
             <h4 className="font-semibold text-white mb-2">Analyze Competitor Content</h4>
             <p className="text-purple-100 text-sm mb-3">
               See what's working in your industry
             </p>
-            <button className="bg-white text-purple-600 px-4 py-2 rounded-lg text-sm font-medium">
-              View Analysis
-            </button>
+            <div className="flex items-center justify-between">
+              <button className="bg-white text-purple-600 px-4 py-2 rounded-lg text-sm font-medium flex items-center space-x-2">
+                <BarChart className="h-4 w-4" />
+                <span>View Analysis</span>
+              </button>
+              <ExternalLink className="h-4 w-4 text-purple-200" />
+            </div>
           </motion.div>
         </div>
       </motion.div>
