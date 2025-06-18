@@ -5,6 +5,7 @@ import { useData } from '../contexts/DataContext';
 import { useAuth } from '../contexts/AuthContext';
 import MetricCard from '../components/Dashboard/MetricCard';
 import EngagementChart from '../components/Charts/EngagementChart';
+import UserSetupGuide from '../components/Setup/UserSetupGuide';
 
 const Dashboard: React.FC = () => {
   const { metricsData, loading, refreshData, error } = useData();
@@ -56,6 +57,11 @@ const Dashboard: React.FC = () => {
           <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
           <span>Refresh</span>
         </motion.button>
+      </motion.div>
+
+      {/* User Setup Guide */}
+      <motion.div variants={itemVariants}>
+        <UserSetupGuide />
       </motion.div>
 
       {/* Data Authenticity Banner */}

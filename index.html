@@ -6,25 +6,45 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Meta Analytics Pro - Content Performance Analyzer</title>
     <meta name="description" content="Comprehensive Facebook and Instagram analytics platform for content optimization and audience insights" />
+    
+    <!-- Open Graph Meta Tags -->
+    <meta property="og:title" content="Meta Analytics Pro - Content Performance Analyzer" />
+    <meta property="og:description" content="Comprehensive Facebook and Instagram analytics platform for content optimization and audience insights" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://yourdomain.com" />
+    <meta property="og:image" content="https://yourdomain.com/og-image.png" />
+    
+    <!-- Twitter Card Meta Tags -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Meta Analytics Pro" />
+    <meta name="twitter:description" content="Comprehensive Facebook and Instagram analytics platform" />
+    <meta name="twitter:image" content="https://yourdomain.com/twitter-image.png" />
   </head>
   <body class="bg-gray-900 text-white">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
     
-    <!-- Facebook SDK -->
+    <!-- Facebook SDK for Production -->
     <script>
       window.fbAsyncInit = function() {
-        console.log('Facebook SDK initializing...');
+        console.log('Facebook SDK initializing for production...');
         FB.init({
-          appId: '649991254751238', // Replace with your actual Facebook App ID
+          appId: '649991254751238', // Your Facebook App ID
           cookie: true,
           xfbml: true,
-          version: 'v18.0'
+          version: 'v19.0', // Latest stable version
+          status: true // Check login status on init
         });
         
-        console.log('Facebook SDK initialized');
+        console.log('✅ Facebook SDK initialized for production');
+        
         // Dispatch custom event when SDK is ready
         window.dispatchEvent(new CustomEvent('fbSdkLoaded'));
+        
+        // Check initial login status
+        FB.getLoginStatus(function(response) {
+          console.log('Initial login status:', response.status);
+        });
       };
 
       (function(d, s, id){
@@ -32,8 +52,21 @@
          if (d.getElementById(id)) {return;}
          js = d.createElement(s); js.id = id;
          js.src = "https://connect.facebook.net/en_US/sdk.js";
+         js.async = true;
+         js.defer = true;
          fjs.parentNode.insertBefore(js, fjs);
        }(document, 'script', 'facebook-jssdk'));
+    </script>
+    
+    <!-- Error Tracking for Production -->
+    <script>
+      window.addEventListener('error', function(e) {
+        console.error('Global error:', e.error);
+      });
+      
+      window.addEventListener('unhandledrejection', function(e) {
+        console.error('Unhandled promise rejection:', e.reason);
+      });
     </script>
   </body>
 </html>
