@@ -1,13 +1,29 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Bug, Eye, EyeOff } from 'lucide-react';
+import { Bug, Eye, EyeOff, User } from 'lucide-react';
+import { useAuth } from '../../contexts/AuthContext';
+import { useData } from '../../contexts/DataContext';
 
 const DebugPanel: React.FC = () => {
   const [isVisible, setIsVisible] = useState(false);
+  const { user } = useAuth();
+  const { metricsData } = useData();
 
   if (import.meta.env.MODE === 'production') {
     return null;
   }
+
+  // Create user seed for debugging (same logic as in analyticsService)
+  const createUserSeed = (userId: string, userName: string): number => {
+    let seed = 0;
+    const combined = userId + userName;
+    for (let i = 0; i < combined.length; i++) {
+      seed = ((seed << 5) - seed + combined.charCodeAt(i)) & 0xffffffff;
+    }
+    return Math.abs(seed);
+  };
+
+  const userSeed = user ? createUserSeed(user.id, user.name) : 0;
 
   const debugInfo = {
     fbSdkLoaded: typeof window !== 'undefined' && window.FB ? '✅ Loaded' : '❌ Not Loaded',
@@ -16,7 +32,15 @@ const DebugPanel: React.FC = () => {
     apiUrl: import.meta.env.VITE_API_URL || 'Not Set',
     userAgent: typeof window !== 'undefined' ? window.navigator.userAgent : 'N/A',
     localStorage: typeof window !== 'undefined' ? Object.keys(localStorage).length : 0,
-    currentUrl: typeof window !== 'undefined' ? window.location.href : 'N/A'
+    currentUrl: typeof window !== 'undefined' ? window.location.href : 'N/A',
+    // User-specific debug info
+    userId: user?.id || 'Not logged in',
+    userName: user?.name || 'Not logged in',
+    userSeed: userSeed,
+    totalReach: metricsData?.totalReach || 'No data',
+    totalEngagement: metricsData?.totalEngagement || 'No data',
+    engagementRate: metricsData?.engagementRate || 'No data',
+    topPostsCount: metricsData?.topPosts?.length || 0
   };
 
   return (
@@ -34,7 +58,7 @@ const DebugPanel: React.FC = () => {
         <motion.div
           initial={{ opacity: 0, scale: 0.9, y: 20 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
-          className="absolute bottom-16 right-0 bg-gray-800 border border-gray-600 rounded-lg p-4 w-80 max-h-96 overflow-y-auto"
+          className="absolute bottom-16 right-0 bg-gray-800 border border-gray-600 rounded-lg p-4 w-96 max-h-96 overflow-y-auto"
         >
           <h3 className="text-white font-bold mb-3 flex items-center">
             <Bug className="h-4 w-4 mr-2" />
@@ -45,12 +69,30 @@ const DebugPanel: React.FC = () => {
             {Object.entries(debugInfo).map(([key, value]) => (
               <div key={key} className="flex justify-between">
                 <span className="text-gray-400 capitalize">{key.replace(/([A-Z])/g, ' $1')}:</span>
-                <span className="text-white font-mono text-right ml-2 break-all">
+                <span className={`text-white font-mono text-right ml-2 break-all ${
+                  key === 'userSeed' ? 'text-yellow-400 font-bold' : ''
+                } ${
+                  key.includes('total') || key.includes('Rate') ? 'text-green-400' : ''
+                }`}>
                   {String(value)}
                 </span>
               </div>
             ))}
           </div>
+
+          {user && (
+            <div className="mt-4 pt-3 border-t border-gray-600">
+              <h4 className="text-white font-semibold mb-2 flex items-center">
+                <User className="h-4 w-4 mr-2" />
+                User Data Verification
+              </h4>
+              <div className="text-xs text-gray-300 space-y-1">
+                <div>User Seed: <span className="text-yellow-400 font-bold">{userSeed}</span></div>
+                <div>This seed ensures different data for each user</div>
+                <div className="text-green-400">✓ Data should be unique per user</div>
+              </div>
+            </div>
+          )}
 
           <div className="mt-4 pt-3 border-t border-gray-600">
             <h4 className="text-white font-semibold mb-2">Quick Actions</h4>
@@ -72,6 +114,12 @@ const DebugPanel: React.FC = () => {
                 className="w-full bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-xs"
               >
                 Log to Console
+              </button>
+              <button
+                onClick={() => console.log('Metrics Data:', metricsData)}
+                className="w-full bg-purple-600 hover:bg-purple-700 text-white px-3 py-1 rounded text-xs"
+              >
+                Log Metrics Data
               </button>
             </div>
           </div>
