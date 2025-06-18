@@ -8,7 +8,9 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "server": "cd server && npm run dev"
+    "server": "cd server && npm run dev",
+    "deploy": "vercel --prod",
+    "deploy-dev": "vercel"
   },
   "dependencies": {
     "axios": "^1.6.2",
