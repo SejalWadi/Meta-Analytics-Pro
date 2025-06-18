@@ -10,7 +10,7 @@ export const authService = {
         reject(new Error('Facebook SDK not loaded'));
         return;
       }
-
+// new file 
       window.FB.getLoginStatus((response: any) => {
         console.log('Login status:', response);
 
