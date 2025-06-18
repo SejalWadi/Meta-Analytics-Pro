@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Plus, Facebook, Instagram, Settings, Users, TrendingUp, Eye } from 'lucide-react';
+import { Plus, Facebook, Instagram, Settings, Users, TrendingUp, RefreshCw, AlertCircle } from 'lucide-react';
 import { analyticsService } from '../services/analyticsService';
 import { useAuth } from '../contexts/AuthContext';
+import toast from 'react-hot-toast';
 
 interface Account {
   id: string;
@@ -17,21 +18,60 @@ const Accounts: React.FC = () => {
   const { user } = useAuth();
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchAccounts();
+    if (user) {
+      fetchAccounts();
+    }
   }, [user]);
 
   const fetchAccounts = async () => {
-    if (!user) return;
+    if (!user?.accessToken) return;
+    
+    setLoading(true);
+    setError(null);
     
     try {
+      console.log('Fetching accounts...');
       const accountsData = await analyticsService.getAccounts(user.accessToken);
+      console.log('Accounts fetched:', accountsData);
       setAccounts(accountsData);
-    } catch (error) {
+      
+      if (accountsData.length === 0) {
+        toast.error('No Facebook pages or Instagram accounts found. Make sure you have admin access to pages.');
+      } else {
+        toast.success(`Found ${accountsData.length} account(s)`);
+      }
+    } catch (error: any) {
       console.error('Failed to fetch accounts:', error);
+      setError(error.message || 'Failed to fetch accounts');
+      toast.error('Failed to fetch accounts. Please try again.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const connectNewAccount = async () => {
+    if (!user?.accessToken) return;
+    
+    try {
+      toast.loading('Connecting new accounts...');
+      
+      // Re-authenticate to get fresh permissions
+      if (typeof window !== 'undefined' && window.FB) {
+        window.FB.login((response: any) => {
+          if (response.authResponse) {
+            // Refresh the page to get new accounts
+            window.location.reload();
+          }
+        }, { 
+          scope: 'pages_show_list,pages_read_engagement,instagram_basic',
+          return_scopes: true 
+        });
+      }
+    } catch (error) {
+      toast.error('Failed to connect new account');
     }
   };
 
@@ -41,6 +81,7 @@ const Accounts: React.FC = () => {
         ? { ...account, isConnected: !account.isConnected }
         : account
     ));
+    toast.success('Account status updated');
   };
 
   const getPlatformIcon = (platform: string) => {
@@ -62,15 +103,40 @@ const Accounts: React.FC = () => {
           <h1 className="text-3xl font-bold text-white">Connected Accounts</h1>
           <p className="text-gray-400 mt-1">Manage your Facebook and Instagram accounts</p>
         </div>
-        <motion.button
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
-        >
-          <Plus className="h-4 w-4" />
-          <span>Add Account</span>
-        </motion.button>
+        <div className="flex items-center space-x-3">
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={fetchAccounts}
+            disabled={loading}
+            className="flex items-center space-x-2 bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+            <span>Refresh</span>
+          </motion.button>
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={connectNewAccount}
+            className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
+          >
+            <Plus className="h-4 w-4" />
+            <span>Add Account</span>
+          </motion.button>
+        </div>
       </div>
+
+      {/* Error Message */}
+      {error && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-red-600 bg-opacity-20 border border-red-600 text-red-400 p-4 rounded-lg flex items-center space-x-2"
+        >
+          <AlertCircle className="h-5 w-5" />
+          <span>{error}</span>
+        </motion.div>
+      )}
 
       {/* Account Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -119,7 +185,7 @@ const Accounts: React.FC = () => {
             <div>
               <p className="text-sm font-medium text-gray-400 mb-1">Total Followers</p>
               <p className="text-2xl font-bold text-white">
-                {accounts.reduce((sum, acc) => sum + acc.followers, 0).toLocaleString()}
+                {accounts.reduce((sum, acc) => sum + (acc.followers || 0), 0).toLocaleString()}
               </p>
             </div>
             <div className="p-3 bg-purple-600 bg-opacity-20 rounded-lg">
@@ -152,6 +218,19 @@ const Accounts: React.FC = () => {
               </div>
             ))}
           </div>
+        ) : accounts.length === 0 ? (
+          <div className="p-8 text-center">
+            <div className="text-gray-400 mb-4">No accounts found</div>
+            <p className="text-sm text-gray-500 mb-4">
+              Make sure you have admin access to Facebook pages or Instagram business accounts
+            </p>
+            <button
+              onClick={connectNewAccount}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
+            >
+              Connect Accounts
+            </button>
+          </div>
         ) : (
           <div className="divide-y divide-gray-700">
             {accounts.map((account, index) => {
@@ -175,9 +254,9 @@ const Accounts: React.FC = () => {
                         <h4 className="font-semibold text-white">{account.name}</h4>
                         <div className="flex items-center space-x-4 text-sm text-gray-400">
                           <span className="capitalize">{account.platform}</span>
-                          <span>{account.followers.toLocaleString()} followers</span>
+                          <span>{(account.followers || 0).toLocaleString()} followers</span>
                           {account.lastSync && (
-                            <span>Last sync: {account.lastSync}</span>
+                            <span>Last sync: {new Date(account.lastSync).toLocaleDateString()}</span>
                           )}
                         </div>
                       </div>
@@ -203,14 +282,6 @@ const Accounts: React.FC = () => {
                         }`}
                       >
                         {account.isConnected ? 'Disconnect' : 'Connect'}
-                      </motion.button>
-                      
-                      <motion.button
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                        className="p-2 text-gray-400 hover:text-white transition-colors"
-                      >
-                        <Settings className="h-4 w-4" />
                       </motion.button>
                     </div>
                   </div>

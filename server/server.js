@@ -39,8 +39,8 @@ app.use(express.urlencoded({ extended: true }));
 
 // Rate limiter
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 100
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // limit each IP to 100 requests per windowMs
 });
 app.use('/api/', limiter);
 
@@ -79,7 +79,7 @@ app.use('/api/', limiter);
     }
   }
 
-  // Health check
+  // Health check route
   app.get('/health', (req, res) => {
     res.json({
       status: 'OK',
@@ -91,24 +91,26 @@ app.use('/api/', limiter);
     });
   });
 
-  // Routes
+  // Public routes (no authentication)
   app.use('/api/auth', authRoutes);
+
+  // Protected routes (require authentication)
   app.use('/api/analytics', authenticateToken, analyticsRoutes);
   app.use('/api/accounts', authenticateToken, accountsRoutes);
   app.use('/api/reports', authenticateToken, reportsRoutes);
   app.use('/api/metrics', authenticateToken, metricsRoutes);
   app.use('/api/optimization-recommendations', authenticateToken, optimizationRoutes); // ✅
 
-  // Error handler
+  // Global error handler middleware
   app.use(errorHandler);
 
-  // Start server
+  // Start the server
   app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
     console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
   });
 
-  // Graceful shutdown
+  // Graceful shutdown on SIGTERM
   process.on('SIGTERM', async () => {
     console.log('SIGTERM received, shutting down gracefully');
 

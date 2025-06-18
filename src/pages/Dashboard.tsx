@@ -1,12 +1,12 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { TrendingUp, Users, Eye, Heart, RefreshCw } from 'lucide-react';
+import { TrendingUp, Users, Eye, Heart, RefreshCw, AlertCircle } from 'lucide-react';
 import { useData } from '../contexts/DataContext';
 import MetricCard from '../components/Dashboard/MetricCard';
 import EngagementChart from '../components/Charts/EngagementChart';
 
 const Dashboard: React.FC = () => {
-  const { metricsData, loading, refreshData } = useData();
+  const { metricsData, loading, refreshData, error } = useData();
 
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -48,6 +48,18 @@ const Dashboard: React.FC = () => {
         </motion.button>
       </motion.div>
 
+      {/* Error Message */}
+      {error && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-red-600 bg-opacity-20 border border-red-600 text-red-400 p-4 rounded-lg flex items-center space-x-2"
+        >
+          <AlertCircle className="h-5 w-5" />
+          <span>{error}</span>
+        </motion.div>
+      )}
+
       {/* Metrics Grid */}
       <motion.div variants={itemVariants} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <MetricCard
@@ -75,8 +87,8 @@ const Dashboard: React.FC = () => {
           loading={loading}
         />
         <MetricCard
-          title="Follower Growth"
-          value={`${metricsData?.followerGrowth || 0}%`}
+          title="Engagement Rate"
+          value={`${metricsData?.engagementRate || 0}%`}
           change="+2.1% from last month"
           changeType="positive"
           icon={Users}
@@ -107,9 +119,9 @@ const Dashboard: React.FC = () => {
                 </div>
               ))}
             </div>
-          ) : (
+          ) : metricsData?.topPosts && metricsData.topPosts.length > 0 ? (
             <div className="space-y-4">
-              {metricsData?.topPosts.map((post, index) => (
+              {metricsData.topPosts.slice(0, 3).map((post, index) => (
                 <motion.div
                   key={post.id}
                   initial={{ opacity: 0, x: -20 }}
@@ -119,10 +131,12 @@ const Dashboard: React.FC = () => {
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
-                      <p className="text-white font-medium mb-2">{post.content}</p>
+                      <p className="text-white font-medium mb-2 line-clamp-2">
+                        {post.content || 'No content available'}
+                      </p>
                       <div className="flex items-center space-x-4 text-sm text-gray-400">
-                        <span>Reach: {post.reach.toLocaleString()}</span>
-                        <span>Engagement: {post.engagement.toLocaleString()}</span>
+                        <span>Reach: {(post.reach || 0).toLocaleString()}</span>
+                        <span>Engagement: {(post.engagement || 0).toLocaleString()}</span>
                         <span className="capitalize">{post.platform}</span>
                       </div>
                     </div>
@@ -134,6 +148,16 @@ const Dashboard: React.FC = () => {
                   </div>
                 </motion.div>
               ))}
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <div className="text-gray-400 mb-2">No posts data available</div>
+              <button 
+                onClick={refreshData}
+                className="text-blue-400 hover:text-blue-300 text-sm"
+              >
+                Try refreshing data
+              </button>
             </div>
           )}
         </motion.div>
@@ -154,9 +178,9 @@ const Dashboard: React.FC = () => {
               </div>
             ))}
           </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
-            {metricsData?.contentPerformance.map((content, index) => (
+        ) : metricsData?.contentPerformance && metricsData.contentPerformance.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            {metricsData.contentPerformance.map((content, index) => (
               <motion.div
                 key={content.type}
                 initial={{ opacity: 0, y: 20 }}
@@ -165,14 +189,24 @@ const Dashboard: React.FC = () => {
                 className="bg-gray-700 p-4 rounded-lg text-center"
               >
                 <div className="text-2xl font-bold text-white mb-1">
-                  {content.posts}
+                  {content.posts || 0}
                 </div>
                 <div className="text-sm text-gray-400 mb-2">{content.type}</div>
                 <div className="text-xs text-gray-500">
-                  Avg: {content.avgEngagement} eng
+                  Avg: {(content.avgEngagement || 0).toLocaleString()} eng
                 </div>
               </motion.div>
             ))}
+          </div>
+        ) : (
+          <div className="text-center py-8">
+            <div className="text-gray-400 mb-2">No content performance data available</div>
+            <button 
+              onClick={refreshData}
+              className="text-blue-400 hover:text-blue-300 text-sm"
+            >
+              Try refreshing data
+            </button>
           </div>
         )}
       </motion.div>

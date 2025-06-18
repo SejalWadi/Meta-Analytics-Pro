@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from './contexts/AuthContext';
@@ -17,7 +17,41 @@ import DebugPanel from './components/Debug/DebugPanel';
 
 function App() {
   console.log('App component rendering');
-  
+
+  // ✅ Facebook SDK Initialization
+  useEffect(() => {
+  // Facebook SDK Initialization
+  window.fbAsyncInit = function () {
+    window.FB.init({
+      appId: '649991254751238', // Replace this with your actual App ID
+      cookie: true,
+      xfbml: true,
+      version: 'v19.0',
+    });
+
+    console.log('✅ Facebook SDK initialized');
+  };
+
+  // Load Facebook SDK script safely
+  const loadFbSdk = () => {
+    if (document.getElementById('facebook-jssdk')) return;
+
+    const js = document.createElement('script');
+    js.id = 'facebook-jssdk';
+    js.src = 'https://connect.facebook.net/en_US/sdk.js';
+
+    const fjs = document.getElementsByTagName('script')[0];
+    if (fjs && fjs.parentNode) {
+      fjs.parentNode.insertBefore(js, fjs);
+    } else {
+      document.body.appendChild(js); // fallback
+    }
+  };
+
+  loadFbSdk();
+}, []);
+
+
   return (
     <AuthProvider>
       <DataProvider>
@@ -57,7 +91,7 @@ function App() {
                 </ProtectedRoute>
               } />
             </Routes>
-            
+
             <DebugPanel />
           </div>
         </Router>
