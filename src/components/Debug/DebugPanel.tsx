@@ -4,9 +4,21 @@ import { Bug, Eye, EyeOff, User, CheckCircle, AlertTriangle, ExternalLink } from
 import { useAuth } from '../../contexts/AuthContext';
 import { useData } from '../../contexts/DataContext';
 
+interface VerificationResult {
+  status: 'checking' | 'success' | 'warning' | 'error';
+  details: string[];
+}
+
+interface VerificationResults {
+  userVerification: VerificationResult;
+  pagesVerification: VerificationResult;
+  postsVerification: VerificationResult;
+  permissionsVerification: VerificationResult;
+}
+
 const DebugPanel: React.FC = () => {
   const [isVisible, setIsVisible] = useState(false);
-  const [verificationResults, setVerificationResults] = useState<any>(null);
+  const [verificationResults, setVerificationResults] = useState<VerificationResults | null>(null);
   const [isVerifying, setIsVerifying] = useState(false);
   const { user } = useAuth();
   const { metricsData } = useData();
@@ -31,7 +43,7 @@ const DebugPanel: React.FC = () => {
     if (!user?.accessToken) return;
     
     setIsVerifying(true);
-    const results = {
+    const results: VerificationResults = {
       userVerification: { status: 'checking', details: [] },
       pagesVerification: { status: 'checking', details: [] },
       postsVerification: { status: 'checking', details: [] },
@@ -246,7 +258,7 @@ const DebugPanel: React.FC = () => {
             <div className="mt-4 pt-3 border-t border-gray-600">
               <h4 className="text-white font-semibold mb-2">Verification Results</h4>
               <div className="space-y-3 text-xs">
-                {Object.entries(verificationResults).map(([key, result]: [string, any]) => (
+                {Object.entries(verificationResults).map(([key, result]) => (
                   <div key={key} className="space-y-1">
                     <div className="flex items-center space-x-2">
                       {result.status === 'success' && <CheckCircle className="h-3 w-3 text-green-400" />}
