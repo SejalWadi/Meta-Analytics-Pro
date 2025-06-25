@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Plus, Facebook, Instagram, Settings, Users, TrendingUp, RefreshCw, AlertCircle, ExternalLink, CheckCircle } from 'lucide-react';
+import { Plus, Facebook, Instagram, Settings, Users, TrendingUp, RefreshCw, AlertCircle, ExternalLink, CheckCircle, Shield, Info } from 'lucide-react';
 import { analyticsService } from '../services/analyticsService';
 import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
@@ -18,18 +18,21 @@ interface Account {
 }
 
 const Accounts: React.FC = () => {
-  const { user } = useAuth();
+  const { user, requestPagePermissions } = useAuth();
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [requestingPermissions, setRequestingPermissions] = useState(false);
   const [setupStatus, setSetupStatus] = useState<{
     hasPages: boolean;
     hasPermissions: boolean;
     needsSetup: boolean;
+    isBasicUser: boolean;
   }>({
     hasPages: false,
     hasPermissions: false,
-    needsSetup: true
+    needsSetup: true,
+    isBasicUser: true
   });
 
   useEffect(() => {
@@ -43,23 +46,19 @@ const Accounts: React.FC = () => {
     if (!user?.accessToken) return;
 
     try {
-      // Check permissions
-      if (typeof window !== 'undefined' && window.FB) {
-        window.FB.api('/me/permissions', { access_token: user.accessToken }, (response: any) => {
-          const grantedPermissions = response.data?.filter((p: any) => p.status === 'granted').map((p: any) => p.permission) || [];
-          const hasPagePermissions = grantedPermissions.includes('pages_show_list');
-          
-          setSetupStatus(prev => ({
-            ...prev,
-            hasPermissions: hasPagePermissions,
-            needsSetup: !hasPagePermissions
-          }));
+      // Check what permissions we actually have
+      const hasBasicPermissions = user.permissions?.grantedPermissions?.includes('email') && 
+                                 user.permissions?.grantedPermissions?.includes('public_profile');
+      const hasPagePermissions = user.permissions?.grantedPermissions?.includes('pages_show_list') || 
+                                user.permissions?.hasPageAccess;
 
-          if (!hasPagePermissions) {
-            setError('Missing required permissions. Please grant page access permissions to see your Facebook pages.');
-          }
-        });
-      }
+      setSetupStatus({
+        hasPermissions: hasPagePermissions,
+        hasPages: false, // Will be updated by fetchAccounts
+        needsSetup: !hasBasicPermissions,
+        isBasicUser: hasBasicPermissions && !hasPagePermissions
+      });
+
     } catch (error) {
       console.error('Error checking setup status:', error);
     }
@@ -73,6 +72,27 @@ const Accounts: React.FC = () => {
     
     try {
       console.log('Fetching accounts for user:', user.name);
+      console.log('User permissions:', user.permissions);
+      
+      // Check if we have page permissions
+      const hasPagePermissions = user.permissions?.grantedPermissions?.includes('pages_show_list') || 
+                                user.permissions?.hasPageAccess;
+
+      if (!hasPagePermissions) {
+        // User doesn't have page permissions - show appropriate message
+        setError('Page permissions not granted. You can still use the app with demo data, or grant permissions to see your real Facebook pages.');
+        setAccounts([]);
+        setSetupStatus(prev => ({
+          ...prev,
+          hasPages: false,
+          isBasicUser: true
+        }));
+        toast.info('Using demo data. Grant page permissions to see your real Facebook pages.');
+        setLoading(false);
+        return;
+      }
+
+      // Try to fetch real accounts
       const accountsData = await analyticsService.getAccounts(user.accessToken);
       console.log('Accounts fetched:', accountsData);
       
@@ -84,75 +104,53 @@ const Accounts: React.FC = () => {
       }));
       
       if (accountsData.length === 0) {
-        setError('No Facebook pages or Instagram accounts found. You need admin access to Facebook pages to see analytics.');
-        toast.error('No pages found. Make sure you have admin access to Facebook pages.');
+        setError('No Facebook pages found. You need admin access to Facebook pages to see analytics. You can still use the app with demo data.');
+        toast.warning('No pages found. The app will show demo data.');
       } else {
         toast.success(`Found ${accountsData.length} account(s)`);
         setError(null);
       }
     } catch (error: any) {
       console.error('Failed to fetch accounts:', error);
-      setError(error.message || 'Failed to fetch accounts');
-      toast.error('Failed to fetch accounts. Please try reconnecting.');
+      
+      // Handle specific permission errors
+      if (error.message.includes('permissions') || error.message.includes('scope')) {
+        setError('Additional permissions needed to access your Facebook pages. You can still use the app with demo data.');
+        toast.info('Using demo data. Grant additional permissions to see real page data.');
+      } else {
+        setError('Unable to fetch account data. The app will show demo data instead.');
+        toast.warning('Using demo data due to API limitations.');
+      }
+      
+      setAccounts([]);
     } finally {
       setLoading(false);
     }
   };
 
-  const requestAdditionalPermissions = async () => {
-    if (!user?.accessToken || typeof window === 'undefined' || !window.FB) {
-      toast.error('Facebook SDK not available. Please refresh the page.');
-      return;
-    }
-
+  const handleRequestPermissions = async () => {
+    setRequestingPermissions(true);
     try {
-      toast.loading('Requesting additional permissions...');
+      toast.loading('Requesting page permissions...');
+      await requestPagePermissions();
+      toast.success('Permissions requested! Refreshing accounts...');
       
-      window.FB.login((response: any) => {
-        if (response.authResponse) {
-          toast.success('Permissions granted! Refreshing accounts...');
-          setTimeout(() => {
-            fetchAccounts();
-            checkSetupStatus();
-          }, 1000);
-        } else {
-          toast.error('Permissions not granted. Please allow access to your Facebook pages.');
-        }
-      }, { 
-        scope: 'pages_show_list,pages_read_engagement,pages_read_user_content,instagram_basic',
-        auth_type: 'rerequest',
-        return_scopes: true 
-      });
-    } catch (error) {
-      toast.error('Failed to request permissions');
+      // Wait a moment then refresh
+      setTimeout(() => {
+        fetchAccounts();
+        checkSetupStatus();
+      }, 2000);
+      
+    } catch (error: any) {
+      console.error('Permission request error:', error);
+      toast.error('Permission request failed. You can still use the app with demo data.');
+    } finally {
+      setRequestingPermissions(false);
     }
   };
 
   const connectNewAccount = async () => {
-    if (!user?.accessToken) return;
-    
-    try {
-      toast.loading('Connecting new accounts...');
-      
-      if (typeof window !== 'undefined' && window.FB) {
-        window.FB.login((response: any) => {
-          if (response.authResponse) {
-            toast.success('New permissions granted! Refreshing...');
-            setTimeout(() => {
-              window.location.reload();
-            }, 1000);
-          } else {
-            toast.error('Connection cancelled');
-          }
-        }, { 
-          scope: 'pages_show_list,pages_read_engagement,pages_read_user_content,instagram_basic',
-          auth_type: 'rerequest',
-          return_scopes: true 
-        });
-      }
-    } catch (error) {
-      toast.error('Failed to connect new account');
-    }
+    handleRequestPermissions();
   };
 
   const toggleAccount = (accountId: string) => {
@@ -178,6 +176,10 @@ const Accounts: React.FC = () => {
 
   const openInstagramBusiness = () => {
     window.open('https://business.instagram.com/', '_blank');
+  };
+
+  const openFacebookAppReview = () => {
+    window.open('https://developers.facebook.com/docs/app-review/', '_blank');
   };
 
   return (
@@ -206,60 +208,102 @@ const Accounts: React.FC = () => {
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
             onClick={connectNewAccount}
-            className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
+            disabled={requestingPermissions}
+            className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
           >
             <Plus className="h-4 w-4" />
-            <span>Add Account</span>
+            <span>{requestingPermissions ? 'Requesting...' : 'Grant Permissions'}</span>
           </motion.button>
         </div>
       </div>
 
-      {/* Setup Guide */}
-      {setupStatus.needsSetup && (
+      {/* App Status Information */}
+      <motion.div
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="bg-blue-600 bg-opacity-20 border border-blue-600 text-blue-400 p-6 rounded-lg"
+      >
+        <div className="flex items-start space-x-3">
+          <Info className="h-6 w-6 mt-0.5" />
+          <div className="flex-1">
+            <h3 className="font-semibold mb-2">App Status & Permissions</h3>
+            <div className="space-y-3 text-sm text-blue-100">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="bg-blue-700 bg-opacity-30 p-3 rounded">
+                  <div className="font-medium text-blue-300 mb-1">✅ Basic Login</div>
+                  <div className="text-xs">Email and profile access working</div>
+                </div>
+                <div className={`p-3 rounded ${setupStatus.hasPermissions ? 'bg-green-700 bg-opacity-30' : 'bg-yellow-700 bg-opacity-30'}`}>
+                  <div className={`font-medium mb-1 ${setupStatus.hasPermissions ? 'text-green-300' : 'text-yellow-300'}`}>
+                    {setupStatus.hasPermissions ? '✅ Page Permissions' : '⚠️ Page Permissions'}
+                  </div>
+                  <div className="text-xs">
+                    {setupStatus.hasPermissions ? 'Can access Facebook pages' : 'Additional permissions needed'}
+                  </div>
+                </div>
+              </div>
+              
+              <div className="bg-blue-700 bg-opacity-30 p-3 rounded">
+                <div className="font-medium text-blue-300 mb-2">Current Status:</div>
+                {setupStatus.isBasicUser ? (
+                  <div className="text-sm">
+                    <p>• You're logged in with basic permissions</p>
+                    <p>• The app shows demo data mixed with any available real data</p>
+                    <p>• Grant additional permissions to see your Facebook page analytics</p>
+                  </div>
+                ) : setupStatus.hasPermissions ? (
+                  <div className="text-sm">
+                    <p>• You have page access permissions</p>
+                    <p>• The app can show real data from your Facebook pages</p>
+                    <p>• All features are available</p>
+                  </div>
+                ) : (
+                  <div className="text-sm">
+                    <p>• Basic login completed</p>
+                    <p>• Additional setup needed for full functionality</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </motion.div>
+
+      {/* Permission Request Section */}
+      {setupStatus.isBasicUser && (
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
           className="bg-yellow-600 bg-opacity-20 border border-yellow-600 text-yellow-400 p-6 rounded-lg"
         >
           <div className="flex items-start space-x-3">
-            <AlertCircle className="h-6 w-6 mt-0.5" />
+            <Shield className="h-6 w-6 mt-0.5" />
             <div className="flex-1">
-              <h3 className="font-semibold mb-2">Setup Required for Full Analytics</h3>
+              <h3 className="font-semibold mb-2">Want to See Your Real Facebook Page Data?</h3>
               <div className="space-y-3 text-sm text-yellow-100">
-                <p>To see your Facebook and Instagram analytics, you need:</p>
+                <p>Currently, you're seeing demo data. To access your real Facebook page analytics:</p>
                 <ul className="list-disc list-inside space-y-1 ml-4">
-                  <li>Admin access to at least one Facebook page</li>
-                  <li>Recent posts on your page (within last 30 days)</li>
-                  <li>Instagram business account linked to Facebook (optional)</li>
-                  <li>Grant all required permissions</li>
+                  <li>Grant additional Facebook permissions</li>
+                  <li>Make sure you have admin access to Facebook pages</li>
+                  <li>Ensure your pages have recent posts</li>
                 </ul>
                 
                 <div className="flex flex-wrap gap-3 mt-4">
-                  {!setupStatus.hasPermissions && (
-                    <button
-                      onClick={requestAdditionalPermissions}
-                      className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center space-x-2"
-                    >
-                      <CheckCircle className="h-4 w-4" />
-                      <span>Grant Permissions</span>
-                    </button>
-                  )}
+                  <button
+                    onClick={handleRequestPermissions}
+                    disabled={requestingPermissions}
+                    className="bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center space-x-2 disabled:opacity-50"
+                  >
+                    <CheckCircle className="h-4 w-4" />
+                    <span>{requestingPermissions ? 'Requesting...' : 'Grant Page Permissions'}</span>
+                  </button>
                   
                   <button
                     onClick={openFacebookPagesManager}
                     className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center space-x-2"
                   >
                     <Facebook className="h-4 w-4" />
-                    <span>Create Facebook Page</span>
-                    <ExternalLink className="h-3 w-3" />
-                  </button>
-                  
-                  <button
-                    onClick={openInstagramBusiness}
-                    className="bg-pink-600 hover:bg-pink-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center space-x-2"
-                  >
-                    <Instagram className="h-4 w-4" />
-                    <span>Setup Instagram Business</span>
+                    <span>Manage Facebook Pages</span>
                     <ExternalLink className="h-3 w-3" />
                   </button>
                 </div>
@@ -270,11 +314,11 @@ const Accounts: React.FC = () => {
       )}
 
       {/* Error Message */}
-      {error && !setupStatus.needsSetup && (
+      {error && (
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-red-600 bg-opacity-20 border border-red-600 text-red-400 p-4 rounded-lg flex items-center space-x-2"
+          className="bg-orange-600 bg-opacity-20 border border-orange-600 text-orange-400 p-4 rounded-lg flex items-center space-x-2"
         >
           <AlertCircle className="h-5 w-5" />
           <span>{error}</span>
@@ -290,8 +334,11 @@ const Accounts: React.FC = () => {
         >
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-400 mb-1">Total Accounts</p>
+              <p className="text-sm font-medium text-gray-400 mb-1">Connected Accounts</p>
               <p className="text-2xl font-bold text-white">{accounts.length}</p>
+              <p className="text-xs text-gray-500">
+                {setupStatus.isBasicUser ? 'Demo mode active' : 'Real data available'}
+              </p>
             </div>
             <div className="p-3 bg-blue-600 bg-opacity-20 rounded-lg">
               <Settings className="h-6 w-6 text-blue-400" />
@@ -311,6 +358,9 @@ const Accounts: React.FC = () => {
               <p className="text-2xl font-bold text-white">
                 {accounts.filter(acc => acc.isConnected).length}
               </p>
+              <p className="text-xs text-gray-500">
+                {setupStatus.hasPermissions ? 'Real accounts' : 'Demo accounts'}
+              </p>
             </div>
             <div className="p-3 bg-green-600 bg-opacity-20 rounded-lg">
               <TrendingUp className="h-6 w-6 text-green-400" />
@@ -328,7 +378,10 @@ const Accounts: React.FC = () => {
             <div>
               <p className="text-sm font-medium text-gray-400 mb-1">Total Followers</p>
               <p className="text-2xl font-bold text-white">
-                {accounts.reduce((sum, acc) => sum + (acc.followers || 0), 0).toLocaleString()}
+                {accounts.reduce((sum, acc) => sum + (acc.followers || 0), 0).toLocaleString() || '12.5K'}
+              </p>
+              <p className="text-xs text-gray-500">
+                {setupStatus.isBasicUser ? 'Demo data' : 'Real followers'}
               </p>
             </div>
             <div className="p-3 bg-purple-600 bg-opacity-20 rounded-lg">
@@ -346,6 +399,12 @@ const Accounts: React.FC = () => {
       >
         <div className="p-6 border-b border-gray-700">
           <h3 className="text-lg font-bold text-white">Account Management</h3>
+          <p className="text-sm text-gray-400 mt-1">
+            {setupStatus.isBasicUser 
+              ? 'Currently showing demo data. Grant permissions to see your real Facebook pages.'
+              : 'Manage your connected Facebook and Instagram accounts.'
+            }
+          </p>
         </div>
         
         {loading ? (
@@ -363,22 +422,28 @@ const Accounts: React.FC = () => {
           </div>
         ) : accounts.length === 0 ? (
           <div className="p-8 text-center">
-            <div className="text-gray-400 mb-4">No accounts found</div>
+            <div className="text-gray-400 mb-4">
+              {setupStatus.isBasicUser ? 'No page permissions granted' : 'No accounts found'}
+            </div>
             <p className="text-sm text-gray-500 mb-4">
-              Make sure you have admin access to Facebook pages or Instagram business accounts
+              {setupStatus.isBasicUser 
+                ? 'The app is working with demo data. Grant page permissions to see your real Facebook pages.'
+                : 'Make sure you have admin access to Facebook pages or Instagram business accounts'
+              }
             </p>
             <div className="space-y-3">
               <button
-                onClick={requestAdditionalPermissions}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors mr-3"
+                onClick={handleRequestPermissions}
+                disabled={requestingPermissions}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors mr-3 disabled:opacity-50"
               >
-                Grant Permissions
+                {requestingPermissions ? 'Requesting...' : 'Grant Page Permissions'}
               </button>
               <button
-                onClick={connectNewAccount}
+                onClick={openFacebookPagesManager}
                 className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition-colors"
               >
-                Connect Accounts
+                Manage Facebook Pages
               </button>
             </div>
           </div>
@@ -460,21 +525,19 @@ const Accounts: React.FC = () => {
           </div>
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <span className="text-gray-300">Pages Access</span>
-              <span className={setupStatus.hasPermissions ? 'text-green-400' : 'text-red-400'}>
-                {setupStatus.hasPermissions ? '✓ Connected' : '✗ Missing'}
-              </span>
+              <span className="text-gray-300">Basic Login</span>
+              <span className="text-green-400">✓ Connected</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-gray-300">Pages Found</span>
-              <span className={setupStatus.hasPages ? 'text-green-400' : 'text-yellow-400'}>
-                {setupStatus.hasPages ? '✓ Found' : '⚠ None'}
+              <span className="text-gray-300">Page Access</span>
+              <span className={setupStatus.hasPermissions ? 'text-green-400' : 'text-yellow-400'}>
+                {setupStatus.hasPermissions ? '✓ Granted' : '○ Optional'}
               </span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-gray-300">Analytics API</span>
-              <span className={setupStatus.hasPages ? 'text-green-400' : 'text-gray-400'}>
-                {setupStatus.hasPages ? '✓ Active' : '○ Pending'}
+              <span className={setupStatus.hasPermissions ? 'text-green-400' : 'text-gray-400'}>
+                {setupStatus.hasPermissions ? '✓ Active' : '○ Demo Mode'}
               </span>
             </div>
           </div>
@@ -500,18 +563,68 @@ const Accounts: React.FC = () => {
             <div className="flex items-center justify-between">
               <span className="text-gray-300">Insights API</span>
               <span className={accounts.some(acc => acc.platform === 'instagram') ? 'text-green-400' : 'text-gray-400'}>
-                {accounts.some(acc => acc.platform === 'instagram') ? '✓ Active' : '○ Pending'}
+                {accounts.some(acc => acc.platform === 'instagram') ? '✓ Active' : '○ Demo Mode'}
               </span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-gray-300">Media Access</span>
               <span className={accounts.some(acc => acc.platform === 'instagram') ? 'text-green-400' : 'text-gray-400'}>
-                {accounts.some(acc => acc.platform === 'instagram') ? '✓ Enabled' : '○ Pending'}
+                {accounts.some(acc => acc.platform === 'instagram') ? '✓ Enabled' : '○ Demo Mode'}
               </span>
             </div>
           </div>
         </motion.div>
       </div>
+
+      {/* App Review Information */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="bg-gray-800 p-6 rounded-xl border border-gray-700"
+      >
+        <div className="flex items-center space-x-3 mb-4">
+          <Shield className="h-6 w-6 text-purple-400" />
+          <h3 className="text-lg font-bold text-white">About Facebook App Permissions</h3>
+        </div>
+        <div className="space-y-3 text-sm text-gray-300">
+          <p>
+            <strong>Why some features show demo data:</strong> Facebook requires apps to go through 
+            "App Review" before accessing advanced permissions like page analytics.
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="bg-gray-700 p-3 rounded">
+              <div className="text-green-400 font-medium mb-1">✅ Currently Available</div>
+              <ul className="text-xs space-y-1">
+                <li>• Basic Facebook login</li>
+                <li>• User profile information</li>
+                <li>• Demo analytics data</li>
+                <li>• All app features (with demo data)</li>
+              </ul>
+            </div>
+            <div className="bg-gray-700 p-3 rounded">
+              <div className="text-yellow-400 font-medium mb-1">⚠️ Requires App Review</div>
+              <ul className="text-xs space-y-1">
+                <li>• Real Facebook page analytics</li>
+                <li>• Instagram business data</li>
+                <li>• Live post performance metrics</li>
+                <li>• Audience demographics</li>
+              </ul>
+            </div>
+          </div>
+          <div className="flex items-center space-x-3 mt-4">
+            <button
+              onClick={openFacebookAppReview}
+              className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center space-x-2"
+            >
+              <ExternalLink className="h-4 w-4" />
+              <span>Learn About App Review</span>
+            </button>
+            <span className="text-xs text-gray-500">
+              For production apps serving real users
+            </span>
+          </div>
+        </div>
+      </motion.div>
     </motion.div>
   );
 };
