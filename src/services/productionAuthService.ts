@@ -16,7 +16,7 @@ export const productionAuthService = {
           // User is already logged in, verify permissions
           verifyPermissions(response.authResponse.accessToken, resolve, reject);
         } else {
-          // User needs to log in
+          // User needs to log in - use only basic permissions that are always available
           console.log('Initiating Facebook login for production...');
           window.FB.login((loginResponse: any) => {
             console.log('Login response:', loginResponse);
@@ -34,11 +34,38 @@ export const productionAuthService = {
               }
             }
           }, { 
-            scope: 'email,public_profile,pages_show_list,pages_read_engagement,pages_read_user_content,instagram_basic',
+            // Use only basic permissions that are always available
+            scope: 'email,public_profile',
             return_scopes: true,
-            auth_type: 'rerequest' // Force permission dialog
+            auth_type: 'rerequest'
           });
         }
+      });
+    });
+  },
+
+  // Request additional permissions separately after basic login
+  requestPagePermissions: (): Promise<any> => {
+    return new Promise((resolve, reject) => {
+      if (typeof window === 'undefined' || !window.FB) {
+        reject(new Error('Facebook SDK not loaded'));
+        return;
+      }
+
+      // Request page permissions separately
+      window.FB.login((response: any) => {
+        if (response.authResponse) {
+          console.log('Additional permissions granted:', response);
+          resolve(response);
+        } else {
+          console.log('Additional permissions denied or cancelled');
+          // Don't reject - user can still use basic features
+          resolve({ authResponse: null, grantedScopes: [] });
+        }
+      }, {
+        scope: 'pages_show_list,pages_read_engagement',
+        auth_type: 'rerequest',
+        return_scopes: true
       });
     });
   },
@@ -86,10 +113,8 @@ function verifyPermissions(accessToken: string, resolve: Function, reject: Funct
     
     const grantedPermissions = response.data?.filter((p: any) => p.status === 'granted').map((p: any) => p.permission) || [];
     const requiredPermissions = ['email', 'public_profile'];
-    const optionalPermissions = ['pages_show_list', 'pages_read_engagement', 'pages_read_user_content', 'instagram_basic'];
     
     const missingRequired = requiredPermissions.filter(perm => !grantedPermissions.includes(perm));
-    const missingOptional = optionalPermissions.filter(perm => !grantedPermissions.includes(perm));
     
     if (missingRequired.length > 0) {
       reject(new Error(`Required permissions missing: ${missingRequired.join(', ')}. Please grant all permissions to use the app.`));
@@ -99,12 +124,11 @@ function verifyPermissions(accessToken: string, resolve: Function, reject: Funct
     // Log permission status for debugging
     console.log('Permission status:', {
       granted: grantedPermissions,
-      missingOptional: missingOptional,
       hasPageAccess: grantedPermissions.includes('pages_show_list'),
       hasInstagramAccess: grantedPermissions.includes('instagram_basic')
     });
     
-    // Get user info even if some optional permissions are missing
+    // Get user info with available permissions
     getUserInfo(accessToken, resolve, reject, {
       hasPageAccess: grantedPermissions.includes('pages_show_list'),
       hasInstagramAccess: grantedPermissions.includes('instagram_basic'),
@@ -133,16 +157,14 @@ function getUserInfo(accessToken: string, resolve: Function, reject: Function, p
         picture: userInfo.picture?.data?.url || '',
         verified: userInfo.verified || false,
         accessToken: accessToken,
-        permissions: permissionInfo || {}
+        permissions: permissionInfo || {
+          hasPageAccess: false,
+          hasInstagramAccess: false,
+          grantedPermissions: ['email', 'public_profile']
+        }
       };
       
       console.log('Successfully authenticated production user:', userData.name);
-      
-      // Show helpful message about permissions
-      if (permissionInfo && !permissionInfo.hasPageAccess) {
-        console.warn('User does not have page access permissions. Limited analytics will be available.');
-      }
-      
       resolve(userData);
     } else {
       console.error('Error getting user info:', userInfo?.error);
@@ -166,40 +188,53 @@ export const checkUserSetup = async (accessToken: string): Promise<{
   };
 
   try {
-    // Check for Facebook pages
-    const pagesResponse = await fetch(
-      `https://graph.facebook.com/me/accounts?access_token=${accessToken}&fields=id,name,fan_count`
-    );
-    const pagesData = await pagesResponse.json();
-    
-    if (pagesData.data && pagesData.data.length > 0) {
-      setup.hasPages = true;
-      
-      // Check for recent posts on first page
-      const page = pagesData.data[0];
-      const postsResponse = await fetch(
-        `https://graph.facebook.com/${page.id}/posts?access_token=${accessToken}&limit=1`
+    // Check for Facebook pages - only if we have permission
+    try {
+      const pagesResponse = await fetch(
+        `https://graph.facebook.com/me/accounts?access_token=${accessToken}&fields=id,name,fan_count`
       );
-      const postsData = await postsResponse.json();
+      const pagesData = await pagesResponse.json();
       
-      if (postsData.data && postsData.data.length > 0) {
-        setup.hasPosts = true;
+      if (pagesData.data && pagesData.data.length > 0) {
+        setup.hasPages = true;
+        
+        // Check for recent posts on first page
+        const page = pagesData.data[0];
+        try {
+          const postsResponse = await fetch(
+            `https://graph.facebook.com/${page.id}/posts?access_token=${accessToken}&limit=1`
+          );
+          const postsData = await postsResponse.json();
+          
+          if (postsData.data && postsData.data.length > 0) {
+            setup.hasPosts = true;
+          }
+        } catch (postsError) {
+          console.log('Posts data not available - may need additional permissions');
+        }
       }
+    } catch (pagesError) {
+      console.log('Pages data not available - may need additional permissions');
     }
     
-    // Check for Instagram
-    const instagramResponse = await fetch(
-      `https://graph.facebook.com/me?fields=instagram_business_account&access_token=${accessToken}`
-    );
-    const instagramData = await instagramResponse.json();
-    
-    if (instagramData.instagram_business_account) {
-      setup.hasInstagram = true;
+    // Check for Instagram - only if we have permission
+    try {
+      const instagramResponse = await fetch(
+        `https://graph.facebook.com/me?fields=instagram_business_account&access_token=${accessToken}`
+      );
+      const instagramData = await instagramResponse.json();
+      
+      if (instagramData.instagram_business_account) {
+        setup.hasInstagram = true;
+      }
+    } catch (instagramError) {
+      console.log('Instagram data not available - may need additional permissions');
     }
     
-    // Generate recommendations
+    // Generate recommendations based on what's available
     if (!setup.hasPages) {
       setup.recommendations.push('Create a Facebook page to access analytics');
+      setup.recommendations.push('Grant page permissions to see your Facebook pages');
     }
     if (!setup.hasPosts) {
       setup.recommendations.push('Post content on your Facebook page to see performance data');
@@ -210,6 +245,7 @@ export const checkUserSetup = async (accessToken: string): Promise<{
     
   } catch (error) {
     console.error('Error checking user setup:', error);
+    setup.recommendations.push('Some features may require additional Facebook permissions');
   }
   
   return setup;

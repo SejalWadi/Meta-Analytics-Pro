@@ -21,6 +21,7 @@ interface AuthContextType {
   login: () => Promise<void>;
   logout: () => void;
   isAuthenticated: boolean;
+  requestPagePermissions: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -65,7 +66,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         const timeout = setTimeout(() => {
           console.log('Facebook SDK load timeout, continuing anyway');
           setLoading(false);
-        }, 10000); // Increased timeout for production
+        }, 10000);
         
         // Cleanup
         return () => {
@@ -144,6 +145,40 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
+  const requestPagePermissions = async () => {
+    try {
+      console.log('Requesting additional page permissions...');
+      
+      if (typeof window === 'undefined' || !window.FB) {
+        throw new Error('Facebook SDK not available');
+      }
+
+      const response = await productionAuthService.requestPagePermissions();
+      
+      if (response.authResponse) {
+        // Update user with new permissions
+        if (user) {
+          const updatedUser = {
+            ...user,
+            accessToken: response.authResponse.accessToken,
+            permissions: {
+              ...user.permissions,
+              hasPageAccess: true,
+              grantedPermissions: [...user.permissions.grantedPermissions, 'pages_show_list', 'pages_read_engagement']
+            }
+          };
+          setUser(updatedUser);
+          localStorage.setItem('user', JSON.stringify(updatedUser));
+          localStorage.setItem('authToken', response.authResponse.accessToken);
+        }
+      }
+      
+    } catch (error) {
+      console.error('Failed to request page permissions:', error);
+      throw error;
+    }
+  };
+
   const logout = () => {
     productionAuthService.logout();
     setUser(null);
@@ -159,7 +194,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         loading,
         login,
         logout,
-        isAuthenticated: !!user
+        isAuthenticated: !!user,
+        requestPagePermissions
       }}
     >
       {children}

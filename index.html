@@ -27,7 +27,7 @@
     <!-- Facebook SDK for Production -->
     <script>
       window.fbAsyncInit = function() {
-        console.log('Facebook SDK initializing for production...');
+        console.log('Facebook SDK initializing...');
         FB.init({
           appId: '649991254751238', // Your Facebook App ID
           cookie: true,
@@ -36,7 +36,7 @@
           status: true // Check login status on init
         });
         
-        console.log('✅ Facebook SDK initialized for production');
+        console.log('✅ Facebook SDK initialized');
         
         // Dispatch custom event when SDK is ready
         window.dispatchEvent(new CustomEvent('fbSdkLoaded'));
@@ -58,7 +58,7 @@
        }(document, 'script', 'facebook-jssdk'));
     </script>
     
-    <!-- Error Tracking for Production -->
+    <!-- Error Tracking -->
     <script>
       window.addEventListener('error', function(e) {
         console.error('Global error:', e.error);
