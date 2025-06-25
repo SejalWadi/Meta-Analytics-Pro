@@ -589,7 +589,7 @@ const Accounts: React.FC = () => {
         <div className="space-y-3 text-sm text-gray-300">
           <p>
             <strong>Why some features show demo data:</strong> Facebook requires apps to go through 
-            "App Review" before accessing advanced permissions like page analytics.
+            "App Review\" before accessing advanced permissions like page analytics.
           </p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="bg-gray-700 p-3 rounded">
