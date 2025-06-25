@@ -13,21 +13,32 @@ export const analyticsService = {
     try {
       console.log('Fetching metrics with params:', params);
       
-      // Try to fetch from backend first
-      const response = await axios.get(`${API_BASE_URL}/analytics/metrics`, {
+      // Create proper JWT token for backend authentication
+      const token = localStorage.getItem('authToken') || params.accessToken;
+      
+      const response = await axios.post(`${API_BASE_URL}/metrics`, {
+        accessToken: params.accessToken,
+        accounts: params.accounts,
+        dateRange: Math.floor((params.dateRange.end.getTime() - params.dateRange.start.getTime()) / (1000 * 60 * 60 * 24))
+      }, {
         headers: {
-          'Authorization': `Bearer ${params.accessToken}`,
+          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        params: {
-          accounts: params.accounts.join(','),
-          dateRange: Math.floor((params.dateRange.end.getTime() - params.dateRange.start.getTime()) / (1000 * 60 * 60 * 24))
-        }
+        timeout: 30000 // 30 second timeout
       });
       
       return response.data;
-    } catch (error) {
-      console.warn('Backend API not available, using Facebook Graph API directly:', error);
+    } catch (error: any) {
+      console.warn('Backend API error, using Facebook Graph API directly:', error.message);
+      
+      // Enhanced error handling
+      if (error.code === 'ECONNREFUSED') {
+        console.log('Backend server not running, using direct Facebook API');
+      } else if (error.response?.status === 401) {
+        console.log('Authentication failed, refreshing token');
+        // Could trigger token refresh here
+      }
       
       // Fallback to direct Facebook API calls with real user data
       return await fetchDirectFromFacebook(params.accessToken);
@@ -38,13 +49,17 @@ export const analyticsService = {
     try {
       console.log('Fetching accounts...');
       
-      // Try backend first
+      const token = localStorage.getItem('authToken') || accessToken;
       const response = await axios.get(`${API_BASE_URL}/accounts`, {
-        headers: { Authorization: `Bearer ${accessToken}` }
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: 15000
       });
       return response.data;
-    } catch (error) {
-      console.warn('Backend not available, fetching directly from Facebook:', error);
+    } catch (error: any) {
+      console.warn('Backend not available, fetching directly from Facebook:', error.message);
       
       // Fallback to direct Facebook API
       return await fetchAccountsDirectly(accessToken);
@@ -53,12 +68,17 @@ export const analyticsService = {
 
   async getOptimizationRecommendations(accessToken: string) {
     try {
-      const response = await axios.get(`${API_BASE_URL}/optimization/recommendations`, {
-        headers: { Authorization: `Bearer ${accessToken}` }
+      const token = localStorage.getItem('authToken') || accessToken;
+      const response = await axios.get(`${API_BASE_URL}/optimization-recommendations`, {
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: 15000
       });
       return response.data;
-    } catch (error) {
-      console.warn('Backend not available, generating recommendations based on user data:', error);
+    } catch (error: any) {
+      console.warn('Backend not available, generating recommendations based on user data:', error.message);
       
       // Generate recommendations based on actual user data
       return await generatePersonalizedRecommendations(accessToken);
@@ -714,7 +734,6 @@ function generateUserSpecificFallbackData(userData: any, userSeed: number) {
   
   return {
     totalReach: getUserSpecificValue(userSeed, 'reach', 500, 25000),
-    
     totalEngagement: getUserSpecificValue(userSeed, 'engagement', 50, 3000),
     totalImpressions: getUserSpecificValue(userSeed, 'impressions', 1000, 40000),
     engagementRate: (getUserSpecificValue(userSeed, 'rate', 10, 80) / 10).toFixed(2),

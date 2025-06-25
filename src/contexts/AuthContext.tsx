@@ -95,6 +95,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         if (typeof window !== 'undefined' && window.FB) {
           window.FB.getLoginStatus((response: any) => {
             if (response.status === 'connected' && response.authResponse.userID === userData.id) {
+              // Update access token if it's different
+              if (response.authResponse.accessToken !== userData.accessToken) {
+                userData.accessToken = response.authResponse.accessToken;
+                localStorage.setItem('user', JSON.stringify(userData));
+              }
               setUser(userData);
             } else {
               console.log('Saved user token is invalid, clearing');
@@ -127,6 +132,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setUser(userData);
       localStorage.setItem('user', JSON.stringify(userData));
       
+      // Store auth token for backend API calls
+      localStorage.setItem('authToken', userData.accessToken);
+      
       // Log permission status for debugging
       console.log('User permissions:', userData.permissions);
       
@@ -140,6 +148,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     productionAuthService.logout();
     setUser(null);
     localStorage.removeItem('user');
+    localStorage.removeItem('authToken');
     console.log('User logged out');
   };
 
