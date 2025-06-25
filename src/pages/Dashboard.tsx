@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { TrendingUp, Users, Eye, Heart, RefreshCw, AlertCircle, Shield, ExternalLink } from 'lucide-react';
+import { TrendingUp, Users, Eye, Heart, RefreshCw, AlertCircle, Shield, ExternalLink, Info } from 'lucide-react';
 import { useData } from '../contexts/DataContext';
 import { useAuth } from '../contexts/AuthContext';
 import MetricCard from '../components/Dashboard/MetricCard';
@@ -34,11 +34,15 @@ const Dashboard: React.FC = () => {
     window.open('https://www.facebook.com/business/insights/tools/audience-insights', '_blank');
   };
 
+  const openFacebookAppReview = () => {
+    window.open('https://developers.facebook.com/docs/app-review/', '_blank');
+  };
+
   // Check if we have real data or should show demo data
-  const hasRealData = metricsData && (
-    (metricsData.topPosts && metricsData.topPosts.length > 0) ||
-    (metricsData.totalReach > 0 && metricsData.totalEngagement > 0)
-  );
+  const hasRealData = metricsData && metricsData.realDataFound;
+  const dataStatus = metricsData?.dataStatus || 'demo';
+  const statusMessage = metricsData?.statusMessage || 'Demo data shown';
+  const appReviewStatus = metricsData?.appReviewStatus || 'unknown';
 
   // Generate demo data if no real data available
   const displayData = hasRealData ? metricsData : {
@@ -94,6 +98,26 @@ const Dashboard: React.FC = () => {
     }))
   };
 
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'real': return 'from-green-600 to-blue-600 border-green-500';
+      case 'limited': return 'from-yellow-600 to-orange-600 border-yellow-500';
+      case 'no_permissions': return 'from-blue-600 to-purple-600 border-blue-500';
+      case 'no_content': return 'from-orange-600 to-red-600 border-orange-500';
+      default: return 'from-gray-600 to-gray-700 border-gray-500';
+    }
+  };
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'real': return '✅';
+      case 'limited': return '⚠️';
+      case 'no_permissions': return '🔒';
+      case 'no_content': return '📭';
+      default: return '🎭';
+    }
+  };
+
   return (
     <motion.div
       variants={containerVariants}
@@ -127,24 +151,22 @@ const Dashboard: React.FC = () => {
       {/* Data Source Information */}
       <motion.div
         variants={itemVariants}
-        className={`p-4 rounded-lg border ${
-          hasRealData 
-            ? 'bg-gradient-to-r from-green-600 to-blue-600 border-green-500' 
-            : 'bg-gradient-to-r from-orange-600 to-yellow-600 border-orange-500'
-        }`}
+        className={`p-4 rounded-lg border bg-gradient-to-r ${getStatusColor(dataStatus)}`}
       >
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
             <Shield className="h-6 w-6 text-white" />
             <div>
-              <h3 className="text-white font-semibold">
-                {hasRealData ? 'Real Data Connected' : 'Demo Mode Active'}
+              <h3 className="text-white font-semibold flex items-center space-x-2">
+                <span>{getStatusIcon(dataStatus)}</span>
+                <span>{statusMessage}</span>
               </h3>
               <p className="text-white text-opacity-90 text-sm">
-                {hasRealData 
-                  ? 'Data fetched directly from Facebook Graph API using your authenticated account'
-                  : 'Showing demo data. Grant page permissions to see your real Facebook analytics'
-                }
+                {dataStatus === 'real' && 'Data fetched directly from Facebook Graph API using your authenticated account'}
+                {dataStatus === 'limited' && 'Your app needs Facebook review to access full page analytics. Showing available data.'}
+                {dataStatus === 'no_permissions' && 'Grant page permissions to see your real Facebook analytics. Currently showing demo data.'}
+                {dataStatus === 'no_content' && 'No content found on your Facebook pages. Create some posts to see analytics.'}
+                {dataStatus === 'demo' && 'Showing demo data. Connect your Facebook pages to see real analytics.'}
               </p>
             </div>
           </div>
@@ -166,6 +188,43 @@ const Dashboard: React.FC = () => {
           </div>
         </div>
       </motion.div>
+
+      {/* App Review Information */}
+      {appReviewStatus === 'needs_review' && (
+        <motion.div
+          variants={itemVariants}
+          className="bg-yellow-600 bg-opacity-20 border border-yellow-600 text-yellow-400 p-4 rounded-lg"
+        >
+          <div className="flex items-start space-x-3">
+            <Info className="h-6 w-6 mt-0.5" />
+            <div className="flex-1">
+              <h3 className="font-semibold mb-2">Facebook App Review Required</h3>
+              <div className="space-y-2 text-sm text-yellow-100">
+                <p>
+                  Your Facebook app is currently in <strong>Development Mode</strong>, which limits access to page analytics. 
+                  To see your real Facebook page data, the app needs to go through Facebook's App Review process.
+                </p>
+                <div className="bg-yellow-700 bg-opacity-30 p-3 rounded">
+                  <p className="font-medium mb-1">What this means:</p>
+                  <ul className="text-xs space-y-1 ml-4">
+                    <li>• Your Facebook page and posts exist, but the app can't access them yet</li>
+                    <li>• Only developers and test users can see real data</li>
+                    <li>• The app shows demo data for regular users</li>
+                    <li>• All app features work perfectly with demo data</li>
+                  </ul>
+                </div>
+                <button
+                  onClick={openFacebookAppReview}
+                  className="bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center space-x-2"
+                >
+                  <ExternalLink className="h-4 w-4" />
+                  <span>Learn About App Review</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </motion.div>
+      )}
 
       {/* Error Message */}
       {error && (
@@ -232,7 +291,7 @@ const Dashboard: React.FC = () => {
             <div className="text-gray-300">
               {hasRealData 
                 ? 'Metrics fetched from Facebook Graph API using your authenticated access token'
-                : 'Sample data shown. Grant page permissions to see your real Facebook analytics'
+                : 'Sample data shown. Grant page permissions or complete app review to see real Facebook analytics'
               }
             </div>
           </div>
@@ -249,11 +308,17 @@ const Dashboard: React.FC = () => {
             <div className="text-gray-300">
               {hasRealData 
                 ? 'Data refreshed from live Facebook servers, not cached or simulated'
-                : 'Demo data for testing. Real data available with page permissions'
+                : 'Demo data for testing. Real data available with proper permissions and app review'
               }
             </div>
           </div>
         </div>
+        {metricsData && (
+          <div className="mt-3 text-xs text-gray-500 bg-gray-700 p-2 rounded">
+            Debug: Pages: {metricsData.totalPages || 0} | Posts: {metricsData.totalPosts || 0} | 
+            Status: {dataStatus} | Permissions: {metricsData.hasPermissions ? 'Yes' : 'No'}
+          </div>
+        )}
       </motion.div>
 
       {/* Charts Section */}

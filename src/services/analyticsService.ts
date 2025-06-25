@@ -86,10 +86,10 @@ export const analyticsService = {
   }
 };
 
-// Enhanced direct Facebook API calls with real user-specific data
+// Enhanced direct Facebook API calls with better error handling and app review detection
 async function fetchDirectFromFacebook(accessToken: string) {
   try {
-    console.log('Fetching real user data directly from Facebook Graph API...');
+    console.log('🔍 Fetching real user data directly from Facebook Graph API...');
     
     // Get current user info first
     const userResponse = await fetch(
@@ -101,120 +101,160 @@ async function fetchDirectFromFacebook(accessToken: string) {
       throw new Error(userData.error.message);
     }
     
-    console.log('Fetching data for user:', userData.name, 'ID:', userData.id);
+    console.log('✅ User verified:', userData.name, 'ID:', userData.id);
     
     // Create user-specific seed for consistent but different data
     const userSeed = createUserSeed(userData.id, userData.name);
-    console.log('User seed:', userSeed);
+    console.log('🎲 User seed:', userSeed);
     
-    // Try to get user's pages with detailed info
-    const pagesResponse = await fetch(
-      `https://graph.facebook.com/me/accounts?access_token=${accessToken}&fields=id,name,fan_count,access_token,category,about,website,phone,emails,location`
+    // Check what permissions we actually have
+    const permissionsResponse = await fetch(
+      `https://graph.facebook.com/me/permissions?access_token=${accessToken}`
     );
-    const pagesData = await pagesResponse.json();
+    const permissionsData = await permissionsResponse.json();
     
-    if (pagesData.error) {
-      console.warn('Pages API error:', pagesData.error);
-      return generateUserSpecificFallbackData(userData, userSeed);
-    }
+    const grantedPermissions = permissionsData.data?.filter((p: any) => p.status === 'granted').map((p: any) => p.permission) || [];
+    console.log('🔐 Granted permissions:', grantedPermissions);
     
+    const hasPagePermissions = grantedPermissions.includes('pages_show_list');
+    const hasEngagementPermissions = grantedPermissions.includes('pages_read_engagement');
+    
+    let realDataFound = false;
     let totalReach = 0;
     let totalEngagement = 0;
     let totalImpressions = 0;
     let totalFollowers = 0;
     let allPosts: any[] = [];
     let pageInsights: any[] = [];
+    let appReviewStatus = 'development'; // Track if app is in development mode
     
-    // Fetch real data for each page
-    for (const page of pagesData.data || []) {
-      try {
-        console.log(`Fetching data for page: ${page.name} (${page.id})`);
-        totalFollowers += page.fan_count || 0;
+    if (hasPagePermissions) {
+      console.log('📄 Attempting to fetch Facebook pages...');
+      
+      // Get user's pages with detailed info
+      const pagesResponse = await fetch(
+        `https://graph.facebook.com/me/accounts?access_token=${accessToken}&fields=id,name,fan_count,access_token,category,about,website,phone,emails,location`
+      );
+      const pagesData = await pagesResponse.json();
+      
+      if (pagesData.error) {
+        console.warn('❌ Pages API error:', pagesData.error);
+        if (pagesData.error.code === 10 || pagesData.error.message.includes('review')) {
+          appReviewStatus = 'needs_review';
+          console.log('🔍 App needs Facebook review for page access');
+        }
+      } else if (pagesData.data && pagesData.data.length > 0) {
+        console.log(`📊 Found ${pagesData.data.length} pages`);
+        realDataFound = true;
         
-        // Get page insights (last 30 days)
-        const since = new Date();
-        since.setDate(since.getDate() - 30);
-        const until = new Date();
-        
-        const insightsResponse = await fetch(
-          `https://graph.facebook.com/${page.id}/insights?` +
-          `metric=page_impressions,page_reach,page_engaged_users,page_fans,page_post_engagements&` +
-          `period=day&` +
-          `since=${since.toISOString().split('T')[0]}&` +
-          `until=${until.toISOString().split('T')[0]}&` +
-          `access_token=${page.access_token}`
-        );
-        const insightsData = await insightsResponse.json();
-        
-        if (insightsData.data) {
-          pageInsights.push(...insightsData.data);
-          
-          // Process insights data
-          insightsData.data.forEach((metric: any) => {
-            if (metric.values && metric.values.length > 0) {
-              const totalValue = metric.values.reduce((sum: number, val: any) => sum + (val.value || 0), 0);
+        // Fetch real data for each page
+        for (const page of pagesData.data) {
+          try {
+            console.log(`📈 Fetching data for page: ${page.name} (${page.id})`);
+            totalFollowers += page.fan_count || 0;
+            
+            if (hasEngagementPermissions) {
+              // Get page insights (last 30 days)
+              const since = new Date();
+              since.setDate(since.getDate() - 30);
+              const until = new Date();
               
-              switch (metric.name) {
-                case 'page_impressions':
-                  totalImpressions += totalValue;
-                  break;
-                case 'page_reach':
-                  totalReach += totalValue;
-                  break;
-                case 'page_engaged_users':
-                case 'page_post_engagements':
-                  totalEngagement += totalValue;
-                  break;
+              const insightsResponse = await fetch(
+                `https://graph.facebook.com/${page.id}/insights?` +
+                `metric=page_impressions,page_reach,page_engaged_users,page_fans,page_post_engagements&` +
+                `period=day&` +
+                `since=${since.toISOString().split('T')[0]}&` +
+                `until=${until.toISOString().split('T')[0]}&` +
+                `access_token=${page.access_token}`
+              );
+              const insightsData = await insightsResponse.json();
+              
+              if (insightsData.data) {
+                pageInsights.push(...insightsData.data);
+                
+                // Process insights data
+                insightsData.data.forEach((metric: any) => {
+                  if (metric.values && metric.values.length > 0) {
+                    const totalValue = metric.values.reduce((sum: number, val: any) => sum + (val.value || 0), 0);
+                    
+                    switch (metric.name) {
+                      case 'page_impressions':
+                        totalImpressions += totalValue;
+                        break;
+                      case 'page_reach':
+                        totalReach += totalValue;
+                        break;
+                      case 'page_engaged_users':
+                      case 'page_post_engagements':
+                        totalEngagement += totalValue;
+                        break;
+                    }
+                  }
+                });
               }
             }
-          });
-        }
-        
-        // Get recent posts with engagement data
-        const postsResponse = await fetch(
-          `https://graph.facebook.com/${page.id}/posts?` +
-          `fields=id,message,story,created_time,type,status_type,likes.summary(true),comments.summary(true),shares,reactions.summary(true)&` +
-          `limit=25&` +
-          `access_token=${page.access_token}`
-        );
-        const postsData = await postsResponse.json();
-        
-        if (postsData.data) {
-          postsData.data.forEach((post: any) => {
-            const likes = post.likes?.summary?.total_count || 0;
-            const comments = post.comments?.summary?.total_count || 0;
-            const shares = post.shares?.count || 0;
-            const reactions = post.reactions?.summary?.total_count || 0;
-            const engagement = likes + comments + shares + reactions;
             
-            // Use user-specific calculation for reach estimation
-            const reachMultiplier = getUserSpecificMultiplier(userSeed, 'reach', 2, 10);
-            const estimatedReach = engagement > 0 ? Math.floor(engagement * reachMultiplier) : getUserSpecificValue(userSeed, 'base_reach', 50, 200);
+            // Get recent posts with engagement data
+            const postsResponse = await fetch(
+              `https://graph.facebook.com/${page.id}/posts?` +
+              `fields=id,message,story,created_time,type,status_type,likes.summary(true),comments.summary(true),shares,reactions.summary(true)&` +
+              `limit=25&` +
+              `access_token=${page.access_token}`
+            );
+            const postsData = await postsResponse.json();
             
-            allPosts.push({
-              id: post.id,
-              content: post.message || post.story || `${post.type || 'Post'} from ${page.name}`,
-              platform: 'facebook',
-              page_name: page.name,
-              reach: estimatedReach,
-              engagement: engagement,
-              likes: likes,
-              comments: comments,
-              shares: shares,
-              reactions: reactions,
-              type: post.type || 'status',
-              status_type: post.status_type,
-              created_time: post.created_time
-            });
-          });
+            if (postsData.error) {
+              console.warn(`❌ Posts API error for ${page.name}:`, postsData.error);
+              if (postsData.error.code === 10 || postsData.error.message.includes('review')) {
+                appReviewStatus = 'needs_review';
+              }
+            } else if (postsData.data && postsData.data.length > 0) {
+              console.log(`📝 Found ${postsData.data.length} posts for ${page.name}`);
+              realDataFound = true;
+              
+              postsData.data.forEach((post: any) => {
+                const likes = post.likes?.summary?.total_count || 0;
+                const comments = post.comments?.summary?.total_count || 0;
+                const shares = post.shares?.count || 0;
+                const reactions = post.reactions?.summary?.total_count || 0;
+                const engagement = likes + comments + shares + reactions;
+                
+                // Use user-specific calculation for reach estimation
+                const reachMultiplier = getUserSpecificMultiplier(userSeed, 'reach', 2, 10);
+                const estimatedReach = engagement > 0 ? Math.floor(engagement * reachMultiplier) : getUserSpecificValue(userSeed, 'base_reach', 50, 200);
+                
+                allPosts.push({
+                  id: post.id,
+                  content: post.message || post.story || `${post.type || 'Post'} from ${page.name}`,
+                  platform: 'facebook',
+                  page_name: page.name,
+                  reach: estimatedReach,
+                  engagement: engagement,
+                  likes: likes,
+                  comments: comments,
+                  shares: shares,
+                  reactions: reactions,
+                  type: post.type || 'status',
+                  status_type: post.status_type,
+                  created_time: post.created_time
+                });
+              });
+            } else {
+              console.log(`📭 No posts found for ${page.name}`);
+            }
+            
+            // Small delay to avoid rate limiting
+            await new Promise(resolve => setTimeout(resolve, 100));
+            
+          } catch (pageError) {
+            console.warn(`❌ Error fetching data for page ${page.name}:`, pageError);
+          }
         }
-        
-        // Small delay to avoid rate limiting
-        await new Promise(resolve => setTimeout(resolve, 100));
-        
-      } catch (pageError) {
-        console.warn(`Error fetching data for page ${page.name}:`, pageError);
+      } else {
+        console.log('📭 No Facebook pages found');
       }
+    } else {
+      console.log('🔒 No page permissions granted');
     }
     
     // Try to get Instagram business accounts
@@ -235,6 +275,7 @@ async function fetchDirectFromFacebook(accessToken: string) {
         
         if (!igInfo.error) {
           totalFollowers += igInfo.followers_count || 0;
+          realDataFound = true;
           
           // Get Instagram media
           const igMediaResponse = await fetch(
@@ -272,13 +313,43 @@ async function fetchDirectFromFacebook(accessToken: string) {
         }
       }
     } catch (instagramError) {
-      console.warn('Instagram data not available:', instagramError);
+      console.warn('❌ Instagram data not available:', instagramError);
     }
     
-    // If no real data found, generate user-specific data
-    if (allPosts.length === 0 && totalFollowers === 0) {
-      console.log('No real data found, generating user-specific fallback data');
-      return generateUserSpecificFallbackData(userData, userSeed);
+    // Determine data status
+    let dataStatus = 'demo';
+    let statusMessage = 'Demo data shown';
+    
+    if (realDataFound && allPosts.length > 0) {
+      dataStatus = 'real';
+      statusMessage = 'Real data from your Facebook account';
+    } else if (hasPagePermissions && appReviewStatus === 'needs_review') {
+      dataStatus = 'limited';
+      statusMessage = 'App needs Facebook review for full access';
+    } else if (!hasPagePermissions) {
+      dataStatus = 'no_permissions';
+      statusMessage = 'Page permissions not granted';
+    } else {
+      dataStatus = 'no_content';
+      statusMessage = 'No content found on your pages';
+    }
+    
+    console.log(`📊 Data Status: ${dataStatus} - ${statusMessage}`);
+    console.log(`📈 Real posts found: ${allPosts.length}`);
+    console.log(`👥 Total followers: ${totalFollowers}`);
+    
+    // If no real data found, generate user-specific demo data
+    if (!realDataFound || allPosts.length === 0) {
+      console.log('🎭 Generating user-specific demo data');
+      const demoData = generateUserSpecificFallbackData(userData, userSeed);
+      return {
+        ...demoData,
+        dataStatus,
+        statusMessage,
+        appReviewStatus,
+        hasPermissions: hasPagePermissions,
+        realDataFound: false
+      };
     }
     
     // Sort posts by engagement
@@ -307,32 +378,50 @@ async function fetchDirectFromFacebook(accessToken: string) {
       topPosts: allPosts.slice(0, 10),
       demographicsData,
       engagementByTime,
-      contentPerformance: contentPerformance.length > 0 ? contentPerformance : generateUserSpecificContentPerformance(userSeed)
+      contentPerformance: contentPerformance.length > 0 ? contentPerformance : generateUserSpecificContentPerformance(userSeed),
+      // Additional metadata
+      dataStatus,
+      statusMessage,
+      appReviewStatus,
+      hasPermissions: hasPagePermissions,
+      realDataFound: true,
+      totalPages: pagesData?.data?.length || 0,
+      totalPosts: allPosts.length
     };
     
-    console.log('Final user data summary:', {
+    console.log('✅ Final user data summary:', {
       user: userData.name,
       userId: userData.id,
       userSeed: userSeed,
-      totalPages: pagesData.data?.length || 0,
-      totalPosts: allPosts.length,
+      dataStatus: finalData.dataStatus,
+      totalPages: finalData.totalPages,
+      totalPosts: finalData.totalPosts,
       totalFollowers,
       finalReach: finalData.totalReach,
       finalEngagement: finalData.totalEngagement,
-      engagementRate: finalData.engagementRate
+      engagementRate: finalData.engagementRate,
+      realDataFound: finalData.realDataFound
     });
     
     return finalData;
     
   } catch (error) {
-    console.error('Error fetching from Facebook API:', error);
+    console.error('❌ Error fetching from Facebook API:', error);
     
     // Get basic user info for fallback
     try {
       const userResponse = await fetch(`https://graph.facebook.com/me?access_token=${accessToken}&fields=id,name`);
       const userData = await userResponse.json();
       const userSeed = createUserSeed(userData.id, userData.name);
-      return generateUserSpecificFallbackData(userData, userSeed);
+      const fallbackData = generateUserSpecificFallbackData(userData, userSeed);
+      return {
+        ...fallbackData,
+        dataStatus: 'error',
+        statusMessage: 'Error fetching data from Facebook',
+        appReviewStatus: 'unknown',
+        hasPermissions: false,
+        realDataFound: false
+      };
     } catch (fallbackError) {
       throw new Error('Unable to fetch any user data from Facebook');
     }
@@ -341,15 +430,32 @@ async function fetchDirectFromFacebook(accessToken: string) {
 
 async function fetchAccountsDirectly(accessToken: string) {
   try {
-    console.log('Fetching accounts directly from Facebook...');
+    console.log('🔍 Fetching accounts directly from Facebook...');
     
     const accounts: any[] = [];
+    
+    // Check permissions first
+    const permissionsResponse = await fetch(
+      `https://graph.facebook.com/me/permissions?access_token=${accessToken}`
+    );
+    const permissionsData = await permissionsResponse.json();
+    const grantedPermissions = permissionsData.data?.filter((p: any) => p.status === 'granted').map((p: any) => p.permission) || [];
+    
+    if (!grantedPermissions.includes('pages_show_list')) {
+      console.log('🔒 No page permissions - returning empty accounts list');
+      return [];
+    }
     
     // Get Facebook pages
     const pagesResponse = await fetch(
       `https://graph.facebook.com/me/accounts?access_token=${accessToken}&fields=id,name,fan_count,category,about,picture`
     );
     const pagesData = await pagesResponse.json();
+    
+    if (pagesData.error) {
+      console.warn('❌ Pages API error:', pagesData.error);
+      return [];
+    }
     
     if (pagesData.data) {
       pagesData.data.forEach((page: any) => {
@@ -394,12 +500,13 @@ async function fetchAccountsDirectly(accessToken: string) {
         }
       }
     } catch (instagramError) {
-      console.warn('Instagram account not available:', instagramError);
+      console.warn('❌ Instagram account not available:', instagramError);
     }
     
+    console.log(`✅ Found ${accounts.length} accounts`);
     return accounts;
   } catch (error) {
-    console.error('Error fetching accounts directly:', error);
+    console.error('❌ Error fetching accounts directly:', error);
     return [];
   }
 }
@@ -410,6 +517,17 @@ async function generatePersonalizedRecommendations(accessToken: string) {
     const userResponse = await fetch(`https://graph.facebook.com/me?access_token=${accessToken}&fields=id,name`);
     const userData = await userResponse.json();
     const userSeed = createUserSeed(userData.id, userData.name);
+    
+    // Check permissions
+    const permissionsResponse = await fetch(
+      `https://graph.facebook.com/me/permissions?access_token=${accessToken}`
+    );
+    const permissionsData = await permissionsResponse.json();
+    const grantedPermissions = permissionsData.data?.filter((p: any) => p.status === 'granted').map((p: any) => p.permission) || [];
+    
+    if (!grantedPermissions.includes('pages_show_list')) {
+      return generateUserSpecificRecommendations(userSeed);
+    }
     
     // Get recent posts to analyze patterns
     const pagesResponse = await fetch(
@@ -730,7 +848,7 @@ function generateUserSpecificRecommendations(userSeed: number) {
 }
 
 function generateUserSpecificFallbackData(userData: any, userSeed: number) {
-  console.log('Generating user-specific fallback data for:', userData.name, 'with seed:', userSeed);
+  console.log('🎭 Generating user-specific fallback data for:', userData.name, 'with seed:', userSeed);
   
   return {
     totalReach: getUserSpecificValue(userSeed, 'reach', 500, 25000),
