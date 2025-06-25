@@ -107,7 +107,7 @@ async function fetchDirectFromFacebook(accessToken: string) {
     const userSeed = createUserSeed(userData.id, userData.name);
     console.log('User seed:', userSeed);
     
-    // Get user's pages with detailed info
+    // Try to get user's pages with detailed info
     const pagesResponse = await fetch(
       `https://graph.facebook.com/me/accounts?access_token=${accessToken}&fields=id,name,fan_count,access_token,category,about,website,phone,emails,location`
     );

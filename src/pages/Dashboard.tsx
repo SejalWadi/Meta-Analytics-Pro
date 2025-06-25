@@ -34,6 +34,66 @@ const Dashboard: React.FC = () => {
     window.open('https://www.facebook.com/business/insights/tools/audience-insights', '_blank');
   };
 
+  // Check if we have real data or should show demo data
+  const hasRealData = metricsData && (
+    (metricsData.topPosts && metricsData.topPosts.length > 0) ||
+    (metricsData.totalReach > 0 && metricsData.totalEngagement > 0)
+  );
+
+  // Generate demo data if no real data available
+  const displayData = hasRealData ? metricsData : {
+    totalReach: 12500,
+    totalEngagement: 2800,
+    totalImpressions: 18900,
+    engagementRate: 5.2,
+    followerGrowth: 8.5,
+    topPosts: [
+      {
+        id: 'demo_1',
+        content: 'Sample post about social media marketing tips and strategies for better engagement',
+        platform: 'facebook',
+        reach: 2500,
+        engagement: 180,
+        likes: 120,
+        comments: 35,
+        shares: 25,
+        created_time: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString()
+      },
+      {
+        id: 'demo_2',
+        content: 'Behind the scenes content that shows authentic brand personality',
+        platform: 'instagram',
+        reach: 1800,
+        engagement: 145,
+        likes: 110,
+        comments: 25,
+        shares: 10,
+        created_time: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString()
+      },
+      {
+        id: 'demo_3',
+        content: 'Educational content about industry trends and insights',
+        platform: 'facebook',
+        reach: 3200,
+        engagement: 220,
+        likes: 150,
+        comments: 45,
+        shares: 25,
+        created_time: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+      }
+    ],
+    contentPerformance: [
+      { type: 'Photos', posts: 12, avgEngagement: 150 },
+      { type: 'Videos', posts: 8, avgEngagement: 280 },
+      { type: 'Status', posts: 6, avgEngagement: 95 },
+      { type: 'Links', posts: 4, avgEngagement: 120 }
+    ],
+    engagementByTime: Array.from({ length: 24 }, (_, hour) => ({
+      hour,
+      engagement: Math.floor(Math.random() * 200) + 50
+    }))
+  };
+
   return (
     <motion.div
       variants={containerVariants}
@@ -64,18 +124,27 @@ const Dashboard: React.FC = () => {
         <UserSetupGuide />
       </motion.div>
 
-      {/* Data Authenticity Banner */}
+      {/* Data Source Information */}
       <motion.div
         variants={itemVariants}
-        className="bg-gradient-to-r from-green-600 to-blue-600 p-4 rounded-lg border border-green-500"
+        className={`p-4 rounded-lg border ${
+          hasRealData 
+            ? 'bg-gradient-to-r from-green-600 to-blue-600 border-green-500' 
+            : 'bg-gradient-to-r from-orange-600 to-yellow-600 border-orange-500'
+        }`}
       >
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
             <Shield className="h-6 w-6 text-white" />
             <div>
-              <h3 className="text-white font-semibold">Data Authenticity Verified</h3>
-              <p className="text-green-100 text-sm">
-                This data is fetched directly from Facebook Graph API using your authenticated account
+              <h3 className="text-white font-semibold">
+                {hasRealData ? 'Real Data Connected' : 'Demo Mode Active'}
+              </h3>
+              <p className="text-white text-opacity-90 text-sm">
+                {hasRealData 
+                  ? 'Data fetched directly from Facebook Graph API using your authenticated account'
+                  : 'Showing demo data. Grant page permissions to see your real Facebook analytics'
+                }
               </p>
             </div>
           </div>
@@ -103,7 +172,7 @@ const Dashboard: React.FC = () => {
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-red-600 bg-opacity-20 border border-red-600 text-red-400 p-4 rounded-lg flex items-center space-x-2"
+          className="bg-orange-600 bg-opacity-20 border border-orange-600 text-orange-400 p-4 rounded-lg flex items-center space-x-2"
         >
           <AlertCircle className="h-5 w-5" />
           <span>{error}</span>
@@ -114,7 +183,7 @@ const Dashboard: React.FC = () => {
       <motion.div variants={itemVariants} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <MetricCard
           title="Total Reach"
-          value={metricsData?.totalReach || 0}
+          value={displayData?.totalReach || 0}
           change="+12.5% from last month"
           changeType="positive"
           icon={Eye}
@@ -122,7 +191,7 @@ const Dashboard: React.FC = () => {
         />
         <MetricCard
           title="Total Engagement"
-          value={metricsData?.totalEngagement || 0}
+          value={displayData?.totalEngagement || 0}
           change="+8.2% from last month"
           changeType="positive"
           icon={Heart}
@@ -130,7 +199,7 @@ const Dashboard: React.FC = () => {
         />
         <MetricCard
           title="Impressions"
-          value={metricsData?.totalImpressions || 0}
+          value={displayData?.totalImpressions || 0}
           change="+5.4% from last month"
           changeType="positive"
           icon={TrendingUp}
@@ -138,7 +207,7 @@ const Dashboard: React.FC = () => {
         />
         <MetricCard
           title="Engagement Rate"
-          value={`${metricsData?.engagementRate || 0}%`}
+          value={`${displayData?.engagementRate || 0}%`}
           change="+2.1% from last month"
           changeType="positive"
           icon={Users}
@@ -146,32 +215,42 @@ const Dashboard: React.FC = () => {
         />
       </motion.div>
 
-      {/* Data Source Information */}
+      {/* Data Source Verification */}
       <motion.div
         variants={itemVariants}
         className="bg-gray-800 p-4 rounded-lg border border-gray-700"
       >
         <h3 className="text-white font-semibold mb-2 flex items-center">
           <Shield className="h-4 w-4 mr-2 text-green-400" />
-          Data Source Verification
+          Data Source Information
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
           <div className="bg-gray-700 p-3 rounded">
-            <div className="text-green-400 font-medium mb-1">✓ Real Facebook Data</div>
+            <div className={`font-medium mb-1 ${hasRealData ? 'text-green-400' : 'text-orange-400'}`}>
+              {hasRealData ? '✓ Real Facebook Data' : '⚠ Demo Data'}
+            </div>
             <div className="text-gray-300">
-              Metrics fetched from Facebook Graph API using your authenticated access token
+              {hasRealData 
+                ? 'Metrics fetched from Facebook Graph API using your authenticated access token'
+                : 'Sample data shown. Grant page permissions to see your real Facebook analytics'
+              }
             </div>
           </div>
           <div className="bg-gray-700 p-3 rounded">
-            <div className="text-green-400 font-medium mb-1">✓ User-Specific</div>
+            <div className="text-blue-400 font-medium mb-1">✓ User-Specific</div>
             <div className="text-gray-300">
               Data is unique to your account: {user?.name} (ID: {user?.id?.substring(0, 8)}...)
             </div>
           </div>
           <div className="bg-gray-700 p-3 rounded">
-            <div className="text-green-400 font-medium mb-1">✓ Real-Time</div>
+            <div className={`font-medium mb-1 ${hasRealData ? 'text-green-400' : 'text-orange-400'}`}>
+              {hasRealData ? '✓ Real-Time' : '⚠ Demo Mode'}
+            </div>
             <div className="text-gray-300">
-              Data refreshed from live Facebook servers, not cached or simulated
+              {hasRealData 
+                ? 'Data refreshed from live Facebook servers, not cached or simulated'
+                : 'Demo data for testing. Real data available with page permissions'
+              }
             </div>
           </div>
         </div>
@@ -181,7 +260,7 @@ const Dashboard: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <motion.div variants={itemVariants}>
           <EngagementChart 
-            data={metricsData?.engagementByTime || []} 
+            data={displayData?.engagementByTime || []} 
             loading={loading}
           />
         </motion.div>
@@ -192,8 +271,12 @@ const Dashboard: React.FC = () => {
         >
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-bold text-white">Top Performing Posts</h3>
-            <div className="text-xs text-gray-400 bg-gray-700 px-2 py-1 rounded">
-              Real Facebook Data
+            <div className={`text-xs px-2 py-1 rounded ${
+              hasRealData 
+                ? 'text-green-400 bg-green-600 bg-opacity-20' 
+                : 'text-orange-400 bg-orange-600 bg-opacity-20'
+            }`}>
+              {hasRealData ? 'Real Facebook Data' : 'Demo Data'}
             </div>
           </div>
           {loading ? (
@@ -205,9 +288,9 @@ const Dashboard: React.FC = () => {
                 </div>
               ))}
             </div>
-          ) : metricsData?.topPosts && metricsData.topPosts.length > 0 ? (
+          ) : displayData?.topPosts && displayData.topPosts.length > 0 ? (
             <div className="space-y-4">
-              {metricsData.topPosts.slice(0, 3).map((post, index) => (
+              {displayData.topPosts.slice(0, 3).map((post, index) => (
                 <motion.div
                   key={post.id}
                   initial={{ opacity: 0, x: -20 }}
@@ -247,7 +330,7 @@ const Dashboard: React.FC = () => {
             <div className="text-center py-8">
               <div className="text-gray-400 mb-2">No posts data available</div>
               <p className="text-sm text-gray-500 mb-4">
-                Make sure you have admin access to Facebook pages or Instagram business accounts
+                Grant page permissions to see your Facebook page analytics, or view demo data
               </p>
               <button 
                 onClick={refreshData}
@@ -267,8 +350,12 @@ const Dashboard: React.FC = () => {
       >
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-bold text-white">Content Performance by Type</h3>
-          <div className="text-xs text-gray-400 bg-gray-700 px-2 py-1 rounded">
-            Based on Real Posts
+          <div className={`text-xs px-2 py-1 rounded ${
+            hasRealData 
+              ? 'text-green-400 bg-green-600 bg-opacity-20' 
+              : 'text-orange-400 bg-orange-600 bg-opacity-20'
+          }`}>
+            {hasRealData ? 'Based on Real Posts' : 'Demo Data'}
           </div>
         </div>
         {loading ? (
@@ -280,9 +367,9 @@ const Dashboard: React.FC = () => {
               </div>
             ))}
           </div>
-        ) : metricsData?.contentPerformance && metricsData.contentPerformance.length > 0 ? (
+        ) : displayData?.contentPerformance && displayData.contentPerformance.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {metricsData.contentPerformance.map((content, index) => (
+            {displayData.contentPerformance.map((content, index) => (
               <motion.div
                 key={content.type}
                 initial={{ opacity: 0, y: 20 }}
@@ -297,8 +384,10 @@ const Dashboard: React.FC = () => {
                 <div className="text-xs text-gray-500">
                   Avg: {(content.avgEngagement || 0).toLocaleString()} eng
                 </div>
-                <div className="text-xs text-green-400 mt-1">
-                  Real data from your posts
+                <div className={`text-xs mt-1 ${
+                  hasRealData ? 'text-green-400' : 'text-orange-400'
+                }`}>
+                  {hasRealData ? 'Real data from your posts' : 'Demo data'}
                 </div>
               </motion.div>
             ))}
@@ -306,6 +395,9 @@ const Dashboard: React.FC = () => {
         ) : (
           <div className="text-center py-8">
             <div className="text-gray-400 mb-2">No content performance data available</div>
+            <p className="text-sm text-gray-500 mb-4">
+              Grant page permissions to see your real content analytics
+            </p>
             <button 
               onClick={refreshData}
               className="text-blue-400 hover:text-blue-300 text-sm"
