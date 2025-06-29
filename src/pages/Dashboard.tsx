@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { TrendingUp, Users, Eye, Heart, RefreshCw, AlertCircle, Shield, ExternalLink, Info } from 'lucide-react';
+import { TrendingUp, Users, Eye, Heart, RefreshCw, AlertCircle, Shield, ExternalLink, Info, CheckCircle } from 'lucide-react';
 import { useData } from '../contexts/DataContext';
 import { useAuth } from '../contexts/AuthContext';
 import MetricCard from '../components/Dashboard/MetricCard';
@@ -30,79 +30,19 @@ const Dashboard: React.FC = () => {
   };
 
   const openInstagramInsights = () => {
-    window.open('https://www.facebook.com/business/insights/tools/audience-insights', '_blank');
+    window.open('https://business.instagram.com/insights', '_blank');
   };
 
-  const openFacebookAppReview = () => {
-    window.open('https://developers.facebook.com/docs/app-review/', '_blank');
-  };
-
-  // Check if we have real data or should show demo data
-  const hasRealData = metricsData && metricsData.realDataFound;
-  const dataStatus = metricsData?.dataStatus || 'demo';
-  const statusMessage = metricsData?.statusMessage || 'Demo data shown';
-  const appReviewStatus = metricsData?.appReviewStatus || 'unknown';
-
-  // Generate demo data if no real data available
-  const displayData = hasRealData ? metricsData : {
-    totalReach: 12500,
-    totalEngagement: 2800,
-    totalImpressions: 18900,
-    engagementRate: 5.2,
-    followerGrowth: 8.5,
-    topPosts: [
-      {
-        id: 'demo_1',
-        content: 'Sample post about social media marketing tips and strategies for better engagement',
-        platform: 'facebook',
-        reach: 2500,
-        engagement: 180,
-        likes: 120,
-        comments: 35,
-        shares: 25,
-        created_time: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString()
-      },
-      {
-        id: 'demo_2',
-        content: 'Behind the scenes content that shows authentic brand personality',
-        platform: 'instagram',
-        reach: 1800,
-        engagement: 145,
-        likes: 110,
-        comments: 25,
-        shares: 10,
-        created_time: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString()
-      },
-      {
-        id: 'demo_3',
-        content: 'Educational content about industry trends and insights',
-        platform: 'facebook',
-        reach: 3200,
-        engagement: 220,
-        likes: 150,
-        comments: 45,
-        shares: 25,
-        created_time: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
-      }
-    ],
-    contentPerformance: [
-      { type: 'Photos', posts: 12, avgEngagement: 150 },
-      { type: 'Videos', posts: 8, avgEngagement: 280 },
-      { type: 'Status', posts: 6, avgEngagement: 95 },
-      { type: 'Links', posts: 4, avgEngagement: 120 }
-    ],
-    engagementByTime: Array.from({ length: 24 }, (_, hour) => ({
-      hour,
-      engagement: Math.floor(Math.random() * 200) + 50
-    }))
-  };
+  // Check data status
+  const hasRealData = metricsData?.realDataFound;
+  const dataStatus = metricsData?.dataStatus || 'loading';
+  const statusMessage = metricsData?.statusMessage || 'Loading your Facebook data...';
 
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'real': return 'from-green-600 to-blue-600 border-green-500';
-      case 'limited': return 'from-yellow-600 to-orange-600 border-yellow-500';
-      case 'no_permissions': return 'from-blue-600 to-purple-600 border-blue-500';
-      case 'no_content': return 'from-orange-600 to-red-600 border-orange-500';
+      case 'no_pages': return 'from-orange-600 to-red-600 border-orange-500';
+      case 'loading': return 'from-blue-600 to-purple-600 border-blue-500';
       default: return 'from-gray-600 to-gray-700 border-gray-500';
     }
   };
@@ -110,10 +50,9 @@ const Dashboard: React.FC = () => {
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'real': return '✅';
-      case 'limited': return '⚠️';
-      case 'no_permissions': return '🔒';
-      case 'no_content': return '📭';
-      default: return '🎭';
+      case 'no_pages': return '📭';
+      case 'loading': return '🔄';
+      default: return '📊';
     }
   };
 
@@ -128,7 +67,7 @@ const Dashboard: React.FC = () => {
       <motion.div variants={itemVariants} className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-white">Dashboard</h1>
-          <p className="text-gray-400 mt-1">Welcome back! Here's your content performance overview.</p>
+          <p className="text-gray-400 mt-1">Welcome back, {user?.name}! Here's your real Facebook analytics.</p>
         </div>
         <motion.button
           whileHover={{ scale: 1.05 }}
@@ -138,11 +77,11 @@ const Dashboard: React.FC = () => {
           className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
         >
           <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-          <span>Refresh</span>
+          <span>Refresh Data</span>
         </motion.button>
       </motion.div>
 
-      {/* Data Source Information */}
+      {/* Real Data Status */}
       <motion.div
         variants={itemVariants}
         className={`p-4 rounded-lg border bg-gradient-to-r ${getStatusColor(dataStatus)}`}
@@ -156,11 +95,9 @@ const Dashboard: React.FC = () => {
                 <span>{statusMessage}</span>
               </h3>
               <p className="text-white text-opacity-90 text-sm">
-                {dataStatus === 'real' && 'Data fetched directly from Facebook Graph API using your authenticated account'}
-                {dataStatus === 'limited' && 'Your app needs Facebook review to access full page analytics. Showing available data.'}
-                {dataStatus === 'no_permissions' && 'Grant page permissions to see your real Facebook analytics. Currently showing demo data.'}
-                {dataStatus === 'no_content' && 'No content found on your Facebook pages. Create some posts to see analytics.'}
-                {dataStatus === 'demo' && 'Showing demo data. Connect your Facebook pages to see real analytics.'}
+                {dataStatus === 'real' && 'Showing real data from your Facebook pages and Instagram account'}
+                {dataStatus === 'no_pages' && 'Create a Facebook page to see real analytics data'}
+                {dataStatus === 'loading' && 'Connecting to Facebook Graph API to fetch your data...'}
               </p>
             </div>
           </div>
@@ -183,40 +120,52 @@ const Dashboard: React.FC = () => {
         </div>
       </motion.div>
 
-      {/* App Review Information */}
-      {appReviewStatus === 'needs_review' && (
+      {/* User Permissions Status */}
+      {user?.permissions && (
         <motion.div
           variants={itemVariants}
-          className="bg-yellow-600 bg-opacity-20 border border-yellow-600 text-yellow-400 p-4 rounded-lg"
+          className="bg-gray-800 p-4 rounded-lg border border-gray-700"
         >
-          <div className="flex items-start space-x-3">
-            <Info className="h-6 w-6 mt-0.5" />
-            <div className="flex-1">
-              <h3 className="font-semibold mb-2">Facebook App Review Required</h3>
-              <div className="space-y-2 text-sm text-yellow-100">
-                <p>
-                  Your Facebook app is currently in <strong>Development Mode</strong>, which limits access to page analytics. 
-                  To see your real Facebook page data, the app needs to go through Facebook's App Review process.
-                </p>
-                <div className="bg-yellow-700 bg-opacity-30 p-3 rounded">
-                  <p className="font-medium mb-1">What this means:</p>
-                  <ul className="text-xs space-y-1 ml-4">
-                    <li>• Your Facebook page and posts exist, but the app can't access them yet</li>
-                    <li>• Only developers and test users can see real data</li>
-                    <li>• The app shows demo data for regular users</li>
-                    <li>• All app features work perfectly with demo data</li>
-                  </ul>
-                </div>
-                <button
-                  onClick={openFacebookAppReview}
-                  className="bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center space-x-2"
-                >
-                  <ExternalLink className="h-4 w-4" />
-                  <span>Learn About App Review</span>
-                </button>
+          <h3 className="text-white font-semibold mb-2 flex items-center">
+            <CheckCircle className="h-4 w-4 mr-2 text-green-400" />
+            Your Facebook Connection Status
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+            <div className="bg-gray-700 p-3 rounded">
+              <div className="text-green-400 font-medium mb-1">✓ Basic Access</div>
+              <div className="text-gray-300">
+                Connected to {user.name}'s Facebook account with email and profile access
+              </div>
+            </div>
+            <div className="bg-gray-700 p-3 rounded">
+              <div className={`font-medium mb-1 ${user.permissions.hasPageAccess ? 'text-green-400' : 'text-orange-400'}`}>
+                {user.permissions.hasPageAccess ? '✓ Page Access' : '⚠ Page Access'}
+              </div>
+              <div className="text-gray-300">
+                {user.permissions.hasPageAccess 
+                  ? 'Can access your Facebook pages and their analytics'
+                  : 'Additional permissions needed for page analytics'
+                }
+              </div>
+            </div>
+            <div className="bg-gray-700 p-3 rounded">
+              <div className={`font-medium mb-1 ${user.permissions.hasInstagramAccess ? 'text-green-400' : 'text-gray-400'}`}>
+                {user.permissions.hasInstagramAccess ? '✓ Instagram' : '○ Instagram'}
+              </div>
+              <div className="text-gray-300">
+                {user.permissions.hasInstagramAccess 
+                  ? 'Instagram business account connected'
+                  : 'Instagram access not configured'
+                }
               </div>
             </div>
           </div>
+          {metricsData && (
+            <div className="mt-3 text-xs text-gray-500 bg-gray-700 p-2 rounded">
+              Real Data Status: Pages: {metricsData.totalPages || 0} | Posts: {metricsData.totalPosts || 0} | 
+              Followers: {metricsData.totalFollowers || 0} | Can Access Real Data: {user.permissions.canAccessRealData ? 'Yes' : 'No'}
+            </div>
+          )}
         </motion.div>
       )}
 
@@ -225,7 +174,7 @@ const Dashboard: React.FC = () => {
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-orange-600 bg-opacity-20 border border-orange-600 text-orange-400 p-4 rounded-lg flex items-center space-x-2"
+          className="bg-red-600 bg-opacity-20 border border-red-600 text-red-400 p-4 rounded-lg flex items-center space-x-2"
         >
           <AlertCircle className="h-5 w-5" />
           <span>{error}</span>
@@ -236,7 +185,7 @@ const Dashboard: React.FC = () => {
       <motion.div variants={itemVariants} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <MetricCard
           title="Total Reach"
-          value={displayData?.totalReach || 0}
+          value={metricsData?.totalReach || 0}
           change="+12.5% from last month"
           changeType="positive"
           icon={Eye}
@@ -244,7 +193,7 @@ const Dashboard: React.FC = () => {
         />
         <MetricCard
           title="Total Engagement"
-          value={displayData?.totalEngagement || 0}
+          value={metricsData?.totalEngagement || 0}
           change="+8.2% from last month"
           changeType="positive"
           icon={Heart}
@@ -252,7 +201,7 @@ const Dashboard: React.FC = () => {
         />
         <MetricCard
           title="Impressions"
-          value={displayData?.totalImpressions || 0}
+          value={metricsData?.totalImpressions || 0}
           change="+5.4% from last month"
           changeType="positive"
           icon={TrendingUp}
@@ -260,7 +209,7 @@ const Dashboard: React.FC = () => {
         />
         <MetricCard
           title="Engagement Rate"
-          value={`${displayData?.engagementRate || 0}%`}
+          value={`${metricsData?.engagementRate || 0}%`}
           change="+2.1% from last month"
           changeType="positive"
           icon={Users}
@@ -268,58 +217,11 @@ const Dashboard: React.FC = () => {
         />
       </motion.div>
 
-      {/* Data Source Verification */}
-      <motion.div
-        variants={itemVariants}
-        className="bg-gray-800 p-4 rounded-lg border border-gray-700"
-      >
-        <h3 className="text-white font-semibold mb-2 flex items-center">
-          <Shield className="h-4 w-4 mr-2 text-green-400" />
-          Data Source Information
-        </h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-          <div className="bg-gray-700 p-3 rounded">
-            <div className={`font-medium mb-1 ${hasRealData ? 'text-green-400' : 'text-orange-400'}`}>
-              {hasRealData ? '✓ Real Facebook Data' : '⚠ Demo Data'}
-            </div>
-            <div className="text-gray-300">
-              {hasRealData 
-                ? 'Metrics fetched from Facebook Graph API using your authenticated access token'
-                : 'Sample data shown. Grant page permissions or complete app review to see real Facebook analytics'
-              }
-            </div>
-          </div>
-          <div className="bg-gray-700 p-3 rounded">
-            <div className="text-blue-400 font-medium mb-1">✓ User-Specific</div>
-            <div className="text-gray-300">
-              Data is unique to your account: {user?.name} (ID: {user?.id?.substring(0, 8)}...)
-            </div>
-          </div>
-          <div className="bg-gray-700 p-3 rounded">
-            <div className={`font-medium mb-1 ${hasRealData ? 'text-green-400' : 'text-orange-400'}`}>
-              {hasRealData ? '✓ Real-Time' : '⚠ Demo Mode'}
-            </div>
-            <div className="text-gray-300">
-              {hasRealData 
-                ? 'Data refreshed from live Facebook servers, not cached or simulated'
-                : 'Demo data for testing. Real data available with proper permissions and app review'
-              }
-            </div>
-          </div>
-        </div>
-        {metricsData && (
-          <div className="mt-3 text-xs text-gray-500 bg-gray-700 p-2 rounded">
-            Debug: Pages: {metricsData.totalPages || 0} | Posts: {metricsData.totalPosts || 0} | 
-            Status: {dataStatus} | Permissions: {metricsData.hasPermissions ? 'Yes' : 'No'}
-          </div>
-        )}
-      </motion.div>
-
       {/* Charts Section */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <motion.div variants={itemVariants}>
           <EngagementChart 
-            data={displayData?.engagementByTime || []} 
+            data={metricsData?.engagementByTime || []} 
             loading={loading}
           />
         </motion.div>
@@ -335,7 +237,7 @@ const Dashboard: React.FC = () => {
                 ? 'text-green-400 bg-green-600 bg-opacity-20' 
                 : 'text-orange-400 bg-orange-600 bg-opacity-20'
             }`}>
-              {hasRealData ? 'Real Facebook Data' : 'Demo Data'}
+              {hasRealData ? 'Real Facebook Data' : 'No Posts Found'}
             </div>
           </div>
           {loading ? (
@@ -347,9 +249,9 @@ const Dashboard: React.FC = () => {
                 </div>
               ))}
             </div>
-          ) : displayData?.topPosts && displayData.topPosts.length > 0 ? (
+          ) : metricsData?.topPosts && metricsData.topPosts.length > 0 ? (
             <div className="space-y-4">
-              {displayData.topPosts.slice(0, 3).map((post, index) => (
+              {metricsData.topPosts.slice(0, 3).map((post, index) => (
                 <motion.div
                   key={post.id}
                   initial={{ opacity: 0, x: -20 }}
@@ -387,15 +289,18 @@ const Dashboard: React.FC = () => {
             </div>
           ) : (
             <div className="text-center py-8">
-              <div className="text-gray-400 mb-2">No posts data available</div>
+              <div className="text-gray-400 mb-2">No posts found</div>
               <p className="text-sm text-gray-500 mb-4">
-                Grant page permissions to see your Facebook page analytics, or view demo data
+                {dataStatus === 'no_pages' 
+                  ? 'Create a Facebook page and post content to see analytics'
+                  : 'Post some content on your Facebook pages to see performance data'
+                }
               </p>
               <button 
                 onClick={refreshData}
                 className="text-blue-400 hover:text-blue-300 text-sm"
               >
-                Try refreshing data
+                Refresh data
               </button>
             </div>
           )}
@@ -414,7 +319,7 @@ const Dashboard: React.FC = () => {
               ? 'text-green-400 bg-green-600 bg-opacity-20' 
               : 'text-orange-400 bg-orange-600 bg-opacity-20'
           }`}>
-            {hasRealData ? 'Based on Real Posts' : 'Demo Data'}
+            {hasRealData ? 'Based on Real Posts' : 'No Data Available'}
           </div>
         </div>
         {loading ? (
@@ -426,9 +331,9 @@ const Dashboard: React.FC = () => {
               </div>
             ))}
           </div>
-        ) : displayData?.contentPerformance && displayData.contentPerformance.length > 0 ? (
+        ) : metricsData?.contentPerformance && metricsData.contentPerformance.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {displayData.contentPerformance.map((content, index) => (
+            {metricsData.contentPerformance.map((content, index) => (
               <motion.div
                 key={content.type}
                 initial={{ opacity: 0, y: 20 }}
@@ -446,7 +351,7 @@ const Dashboard: React.FC = () => {
                 <div className={`text-xs mt-1 ${
                   hasRealData ? 'text-green-400' : 'text-orange-400'
                 }`}>
-                  {hasRealData ? 'Real data from your posts' : 'Demo data'}
+                  {hasRealData ? 'Real data from your posts' : 'No data available'}
                 </div>
               </motion.div>
             ))}
@@ -455,13 +360,16 @@ const Dashboard: React.FC = () => {
           <div className="text-center py-8">
             <div className="text-gray-400 mb-2">No content performance data available</div>
             <p className="text-sm text-gray-500 mb-4">
-              Grant page permissions to see your real content analytics
+              {dataStatus === 'no_pages' 
+                ? 'Create a Facebook page and post content to see performance analytics'
+                : 'Post content on your Facebook pages to see performance breakdown'
+              }
             </p>
             <button 
               onClick={refreshData}
               className="text-blue-400 hover:text-blue-300 text-sm"
             >
-              Try refreshing data
+              Refresh data
             </button>
           </div>
         )}

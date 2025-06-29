@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { productionAuthService } from '../services/productionAuthService';
+import { productionAuthService, checkUserRealDataAccess } from '../services/productionAuthService';
 
 interface User {
   id: string;
@@ -12,6 +12,7 @@ interface User {
     hasPageAccess: boolean;
     hasInstagramAccess: boolean;
     grantedPermissions: string[];
+    canAccessRealData: boolean;
   };
 }
 
@@ -21,7 +22,8 @@ interface AuthContextType {
   login: () => Promise<void>;
   logout: () => void;
   isAuthenticated: boolean;
-  requestPagePermissions: () => Promise<void>;
+  requestAdditionalPermissions: () => Promise<void>;
+  checkUserSetup: () => Promise<any>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -44,17 +46,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [sdkLoaded, setSdkLoaded] = useState(false);
 
   useEffect(() => {
-    console.log('AuthProvider mounted - Production Mode');
+    console.log('🔐 AuthProvider mounted - Real Facebook Integration Mode');
     
     // Check if SDK is already loaded
     if (typeof window !== 'undefined' && window.FB) {
-      console.log('Facebook SDK already loaded');
+      console.log('✅ Facebook SDK already loaded');
       setSdkLoaded(true);
       setLoading(false);
     } else {
       // Listen for SDK load event
       const handleSdkLoad = () => {
-        console.log('Facebook SDK loaded event received');
+        console.log('✅ Facebook SDK loaded event received');
         setSdkLoaded(true);
         setLoading(false);
       };
@@ -64,7 +66,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         
         // Fallback timeout in case SDK doesn't load
         const timeout = setTimeout(() => {
-          console.log('Facebook SDK load timeout, continuing anyway');
+          console.log('⚠️ Facebook SDK load timeout, continuing anyway');
           setLoading(false);
         }, 10000);
         
@@ -90,7 +92,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const savedUser = localStorage.getItem('user');
       if (savedUser) {
         const userData = JSON.parse(savedUser);
-        console.log('Found saved user:', userData.name);
+        console.log('🔍 Found saved user:', userData.name);
         
         // Verify the saved token is still valid
         if (typeof window !== 'undefined' && window.FB) {
@@ -102,8 +104,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                 localStorage.setItem('user', JSON.stringify(userData));
               }
               setUser(userData);
+              console.log('✅ User session restored:', userData.name);
             } else {
-              console.log('Saved user token is invalid, clearing');
+              console.log('❌ Saved user token is invalid, clearing');
               localStorage.removeItem('user');
             }
           });
@@ -112,48 +115,53 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         }
       }
     } catch (error) {
-      console.error('Error parsing saved user data:', error);
+      console.error('❌ Error parsing saved user data:', error);
       localStorage.removeItem('user');
     }
   };
 
   const login = async () => {
     try {
-      console.log('Starting production Facebook login...');
-      console.log('SDK loaded:', sdkLoaded);
-      console.log('FB object:', typeof window !== 'undefined' ? !!window.FB : 'undefined');
+      console.log('🚀 Starting real Facebook login for data access...');
+      console.log('📊 SDK loaded:', sdkLoaded);
+      console.log('🔧 FB object:', typeof window !== 'undefined' ? !!window.FB : 'undefined');
       
       if (typeof window === 'undefined' || !window.FB) {
         throw new Error('Facebook SDK not loaded. Please refresh the page and try again.');
       }
 
       const userData = await productionAuthService.loginWithFacebook();
-      console.log('Production Facebook login successful:', userData.name);
+      console.log('🎉 Real Facebook login successful:', userData.name);
+      console.log('🔐 Permissions granted:', userData.permissions.grantedPermissions);
       
       setUser(userData);
       localStorage.setItem('user', JSON.stringify(userData));
       
-      // Store auth token for backend API calls
+      // Store auth token for API calls
       localStorage.setItem('authToken', userData.accessToken);
       
-      // Log permission status for debugging
-      console.log('User permissions:', userData.permissions);
+      // Check user's real data access
+      if (userData.permissions.canAccessRealData) {
+        console.log('✅ User can access real Facebook data');
+      } else {
+        console.log('⚠️ User needs additional permissions for full data access');
+      }
       
     } catch (error) {
-      console.error('Production login failed:', error);
+      console.error('❌ Real Facebook login failed:', error);
       throw error;
     }
   };
 
-  const requestPagePermissions = async () => {
+  const requestAdditionalPermissions = async () => {
     try {
-      console.log('Requesting additional page permissions...');
+      console.log('🔑 Requesting additional Facebook permissions...');
       
       if (typeof window === 'undefined' || !window.FB) {
         throw new Error('Facebook SDK not available');
       }
 
-      const response = await productionAuthService.requestPagePermissions();
+      const response = await productionAuthService.requestAdditionalPermissions();
       
       if (response.authResponse) {
         // Update user with new permissions
@@ -164,17 +172,35 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             permissions: {
               ...user.permissions,
               hasPageAccess: true,
+              canAccessRealData: true,
               grantedPermissions: [...user.permissions.grantedPermissions, 'pages_show_list', 'pages_read_engagement']
             }
           };
           setUser(updatedUser);
           localStorage.setItem('user', JSON.stringify(updatedUser));
           localStorage.setItem('authToken', response.authResponse.accessToken);
+          console.log('✅ Additional permissions granted');
         }
       }
       
     } catch (error) {
-      console.error('Failed to request page permissions:', error);
+      console.error('❌ Failed to request additional permissions:', error);
+      throw error;
+    }
+  };
+
+  const checkUserSetup = async () => {
+    if (!user?.accessToken) {
+      throw new Error('User not authenticated');
+    }
+    
+    try {
+      console.log('🔍 Checking user\'s real Facebook setup...');
+      const setup = await checkUserRealDataAccess(user.accessToken);
+      console.log('📊 User setup status:', setup);
+      return setup;
+    } catch (error) {
+      console.error('❌ Error checking user setup:', error);
       throw error;
     }
   };
@@ -184,7 +210,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setUser(null);
     localStorage.removeItem('user');
     localStorage.removeItem('authToken');
-    console.log('User logged out');
+    console.log('👋 User logged out');
   };
 
   return (
@@ -195,7 +221,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         login,
         logout,
         isAuthenticated: !!user,
-        requestPagePermissions
+        requestAdditionalPermissions,
+        checkUserSetup
       }}
     >
       {children}
